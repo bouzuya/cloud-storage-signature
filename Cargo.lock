@@ -136,6 +136,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "cloud-storage-signature"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.0",
+ "chrono",
+ "form_urlencoded",
+ "http",
+ "pem",
+ "reqwest",
+ "ring",
+ "serde",
+ "serde_json",
+ "sha256",
+ "thiserror",
+ "tokio",
+ "url",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1020,26 +1040,6 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
-]
-
-[[package]]
-name = "v4-sign"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.22.0",
- "chrono",
- "form_urlencoded",
- "http",
- "pem",
- "reqwest",
- "ring",
- "serde",
- "serde_json",
- "sha256",
- "thiserror",
- "tokio",
- "url",
 ]
 
 [[package]]

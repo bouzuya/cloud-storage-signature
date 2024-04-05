@@ -1,13 +1,13 @@
 use std::time::{Duration, SystemTime};
 
-use v4_sign::{BuildHtmlFormDataOptions, BuildSignedUrlOptions};
+use cloud_storage_signature::{BuildHtmlFormDataOptions, BuildSignedUrlOptions};
 
 #[ignore]
 #[tokio::test]
 async fn test_build_html_form_data() -> anyhow::Result<()> {
-    use v4_sign::build_html_form_data;
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_html_form_data;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let ServiceAccountCredentials {
         client_email: service_account_client_email,
@@ -66,8 +66,8 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn test_setup_a_txt() -> anyhow::Result<()> {
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -120,8 +120,8 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn test_get() -> anyhow::Result<()> {
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -151,8 +151,8 @@ async fn test_get() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn test_get_timeout() -> anyhow::Result<()> {
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -183,8 +183,8 @@ async fn test_get_timeout() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn test_post_invalid_http_method() -> anyhow::Result<()> {
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -213,8 +213,8 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn test_post() -> anyhow::Result<()> {
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "b.txt";
@@ -260,8 +260,8 @@ async fn test_post() -> anyhow::Result<()> {
 #[ignore]
 #[tokio::test]
 async fn test_post_bin() -> anyhow::Result<()> {
-    use v4_sign::build_signed_url;
-    use v4_sign::ServiceAccountCredentials;
+    use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "c.png";
