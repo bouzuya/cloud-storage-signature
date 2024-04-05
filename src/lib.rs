@@ -27,7 +27,7 @@ pub struct Error(#[from] ErrorKind);
 #[derive(Debug, thiserror::Error)]
 enum ErrorKind {
     #[error(transparent)]
-    CredentialScope(#[from] crate::private::credential_scope::Error),
+    CredentialScope(crate::private::credential_scope::Error),
     #[error(transparent)]
     Expiration(crate::private::expiration::Error),
     #[error("expiration out of range")]
