@@ -22,7 +22,7 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
         bucket_name: bucket_name.clone(),
         object_name: object_name.to_string(),
         region: None,
-        expires: 2,
+        expires: SystemTime::now() + Duration::from_secs(2),
         accessible_at: None,
     })?;
     let client = reqwest::Client::new();
