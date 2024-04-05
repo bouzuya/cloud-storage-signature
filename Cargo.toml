@@ -1,6 +1,6 @@
 [package]
 name = "cloud-storage-signature"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["bouzuya <m@bouzuya.net>"]
 description = "A Cloud Storage signature utils"
 edition = "2021"
