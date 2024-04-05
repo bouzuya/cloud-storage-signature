@@ -84,7 +84,7 @@ pub fn build_html_form_data(
         expires,
         accessible_at,
     }: BuildHtmlFormDataOptions,
-) -> Result<Vec<(&'static str, String)>, Error> {
+) -> Result<Vec<(String, String)>, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
     if expires <= accessible_at {
         Err(ErrorKind::ExpirationOutOfRange)?
@@ -147,7 +147,7 @@ pub fn build_html_form_data(
         sign(x_goog_algorithm, signing_key, message.as_bytes()).map_err(ErrorKind::SignedUrl)?;
     let request_signature = hex_encode(&message_digest);
 
-    Ok(vec![
+    Ok([
         ("bucket", bucket_name),
         ("key", object_name),
         ("policy", encoded_policy),
@@ -155,7 +155,10 @@ pub fn build_html_form_data(
         ("x-goog-credential", x_goog_credential),
         ("x-goog-date", x_goog_date),
         ("x-goog-signature", request_signature),
-    ])
+    ]
+    .into_iter()
+    .map(|(name, value)| (name.to_string(), value))
+    .collect::<Vec<(String, String)>>())
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
