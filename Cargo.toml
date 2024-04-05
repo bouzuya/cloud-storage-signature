@@ -1,7 +1,13 @@
 [package]
 name = "cloud-storage-signature"
 version = "0.1.0"
+authors = ["bouzuya <m@bouzuya.net>"]
+description = "A Cloud Storage signature utils"
 edition = "2021"
+exclude = [".github", "docs"]
+keywords = ["storage", "gcloud", "google", "cloud"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/bouzuya/cloud-storage-signature"
 
 [dependencies]
 base64 = "0.22.0"
