@@ -72,9 +72,9 @@ pub struct BuildHtmlFormDataOptions {
     pub region: Option<String>,
     pub expires: SystemTime,
     pub accessible_at: Option<SystemTime>,
-    // max size is 5 TiB
+    // max content-length size is 5 TiB
     // <https://cloud.google.com/storage/quotas#objects>
-    pub size: Option<u64>,
+    pub content_length: Option<u64>,
 }
 
 pub fn build_html_form_data(
@@ -86,7 +86,7 @@ pub fn build_html_form_data(
         region,
         expires,
         accessible_at,
-        size,
+        content_length,
     }: BuildHtmlFormDataOptions,
 ) -> Result<Vec<(String, String)>, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
@@ -111,8 +111,11 @@ pub fn build_html_form_data(
         policy_document::Field::new("bucket").map_err(ErrorKind::Field)?,
         policy_document::Value::new(bucket_name.clone()),
     ));
-    if let Some(size) = size {
-        conditions.push(policy_document::Condition::ContentLengthRange(size, size));
+    if let Some(content_length) = content_length {
+        conditions.push(policy_document::Condition::ContentLengthRange(
+            content_length,
+            content_length,
+        ));
     }
     conditions.push(policy_document::Condition::ExactMatching(
         policy_document::Field::new("key").map_err(ErrorKind::Field)?,
@@ -156,8 +159,8 @@ pub fn build_html_form_data(
 
     let mut form_data = vec![];
     form_data.push(("bucket".to_string(), bucket_name));
-    if let Some(size) = size {
-        form_data.push(("Content-Length".to_string(), size.to_string()));
+    if let Some(content_length) = content_length {
+        form_data.push(("Content-Length".to_string(), content_length.to_string()));
     }
     form_data.push(("key".to_string(), object_name));
     form_data.push(("policy".to_string(), encoded_policy));
