@@ -8,16 +8,18 @@
 
 <body>
   <h1>image-uploader</h1>
-  <input accept="image/png" type="file" />
+  <input type="file" />
   <script>
-    // createImage(): Promise<{
+    // createImage(size: number, type: number): Promise<{
     //   formData: [string, string][];
     //   method: string;
     //   url: string;
     // }>
-    async function createImage() {
+    async function createImage(size, type) {
       const response = await fetch("/images", {
-        method: "POST"
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ size, type }),
       });
       if (response.status !== 200) throw new Error("createImage failed");
       const { form_data: formData, method, url } = await response.json();
@@ -46,9 +48,12 @@
 
     function onChange(event) {
       if (event.target.files.length === 0) return;
+      const file = event.target.files[0];
+      // <https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/file#getting_information_on_selected_files>
+      console.log(`file selected (size = ${file.size}, type = ${file.type})`);
       void (async () => {
-        const { formData, method, url } = await createImage();
-        await uploadImage(url, method, formData, event.target.files[0]);
+        const { formData, method, url } = await createImage(file.size, file.type);
+        await uploadImage(url, method, formData, file);
       })();
     }
 
