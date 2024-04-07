@@ -1,0 +1,4 @@
+# set your bucket name
+BUCKET_NAME=
+# set your service account file path
+GOOGLE_APPLICATION_CREDENTIALS=

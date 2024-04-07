@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>image-uploader</title>
+</head>
+
+<body>
+  <h1>image-uploader</h1>
+  <input accept="image/png" type="file" />
+  <script>
+    // createImage(): Promise<{
+    //   formData: [string, string][];
+    //   method: string;
+    //   url: string;
+    // }>
+    async function createImage() {
+      const response = await fetch("/images", {
+        method: "POST"
+      });
+      if (response.status !== 200) throw new Error("createImage failed");
+      const { form_data: formData, method, url } = await response.json();
+      return { formData, method, url };
+    }
+
+    // uploadImage(
+    //   url: string,
+    //   method: string,
+    //   formData: [string, string][],
+    //   file: File
+    // ): Promise<void>
+    async function uploadImage(url, method, formData, file) {
+      const init = new FormData();
+      const body = formData.reduce((formData, [name, value]) => {
+        formData.set(name, value);
+        return formData;
+      }, init);
+      body.set("file", file);
+
+      const response = await fetch(url, { body, method });
+      if (response.status !== 204) throw new Error("uploadImage failed");
+      const responseBody = await response.text();
+      if (responseBody !== "") throw new Error("uploadImage response body is invalid");
+    }
+
+    function onChange(event) {
+      if (event.target.files.length === 0) return;
+      void (async () => {
+        const { formData, method, url } = await createImage();
+        await uploadImage(url, method, formData, event.target.files[0]);
+      })();
+    }
+
+    function main() {
+      const element = document.querySelector("input[type='file']");
+      if (element === null) throw new Error("input[type='file'] not found");
+      element.addEventListener("change", onChange);
+    }
+    main();
+  </script>
+</body>
+
+</html>
