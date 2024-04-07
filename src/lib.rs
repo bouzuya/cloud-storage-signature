@@ -75,6 +75,7 @@ pub struct BuildHtmlFormDataOptions {
     // max content-length size is 5 TiB
     // <https://cloud.google.com/storage/quotas#objects>
     pub content_length: Option<u64>,
+    pub content_type: Option<String>,
 }
 
 pub fn build_html_form_data(
@@ -87,6 +88,7 @@ pub fn build_html_form_data(
         expires,
         accessible_at,
         content_length,
+        content_type,
     }: BuildHtmlFormDataOptions,
 ) -> Result<Vec<(String, String)>, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
@@ -115,6 +117,12 @@ pub fn build_html_form_data(
         conditions.push(policy_document::Condition::ContentLengthRange(
             content_length,
             content_length,
+        ));
+    }
+    if let Some(content_type) = content_type.as_ref() {
+        conditions.push(policy_document::Condition::ExactMatching(
+            policy_document::Field::new("Content-Type").map_err(ErrorKind::Field)?,
+            policy_document::Value::new(content_type.to_string()),
         ));
     }
     conditions.push(policy_document::Condition::ExactMatching(
@@ -161,6 +169,9 @@ pub fn build_html_form_data(
     form_data.push(("bucket".to_string(), bucket_name));
     if let Some(content_length) = content_length {
         form_data.push(("Content-Length".to_string(), content_length.to_string()));
+    }
+    if let Some(content_type) = content_type {
+        form_data.push(("Content-Type".to_string(), content_type.to_string()));
     }
     form_data.push(("key".to_string(), object_name));
     form_data.push(("policy".to_string(), encoded_policy));
