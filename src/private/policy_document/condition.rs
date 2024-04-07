@@ -4,7 +4,7 @@ use super::{field::Field, value::Value};
 pub enum Condition {
     ExactMatching(Field, Value),
     StartsWith(Field, Value),
-    ContentLengthRange(usize, usize),
+    ContentLengthRange(u64, u64),
 }
 
 impl<'de> serde::Deserialize<'de> for Condition {

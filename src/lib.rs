@@ -72,6 +72,9 @@ pub struct BuildHtmlFormDataOptions {
     pub region: Option<String>,
     pub expires: SystemTime,
     pub accessible_at: Option<SystemTime>,
+    // max size is 5 TiB
+    // <https://cloud.google.com/storage/quotas#objects>
+    pub size: Option<u64>,
 }
 
 pub fn build_html_form_data(
@@ -83,6 +86,7 @@ pub fn build_html_form_data(
         region,
         expires,
         accessible_at,
+        size,
     }: BuildHtmlFormDataOptions,
 ) -> Result<Vec<(String, String)>, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
@@ -102,32 +106,35 @@ pub fn build_html_form_data(
     let x_goog_algorithm = SigningAlgorithm::Goog4RsaSha256;
     let x_goog_credential = format!("{}/{}", service_account_client_email, credential_scope);
     let x_goog_date = ActiveDatetime::from_unix_timestamp_obj(now).to_string();
+    let mut conditions = vec![];
+    conditions.push(policy_document::Condition::ExactMatching(
+        policy_document::Field::new("bucket").map_err(ErrorKind::Field)?,
+        policy_document::Value::new(bucket_name.clone()),
+    ));
+    if let Some(size) = size {
+        conditions.push(policy_document::Condition::ContentLengthRange(size, size));
+    }
+    conditions.push(policy_document::Condition::ExactMatching(
+        policy_document::Field::new("key").map_err(ErrorKind::Field)?,
+        policy_document::Value::new(object_name.clone()),
+    ));
+    // `policy` field is not included in the policy document
+    conditions.push(policy_document::Condition::ExactMatching(
+        policy_document::Field::new("x-goog-algorithm").map_err(ErrorKind::Field)?,
+        policy_document::Value::new(x_goog_algorithm.as_ref()),
+    ));
+    conditions.push(policy_document::Condition::ExactMatching(
+        policy_document::Field::new("x-goog-credential").map_err(ErrorKind::Field)?,
+        policy_document::Value::new(x_goog_credential.as_str()),
+    ));
+    conditions.push(policy_document::Condition::ExactMatching(
+        policy_document::Field::new("x-goog-date").map_err(ErrorKind::Field)?,
+        policy_document::Value::new(x_goog_date.clone()),
+    ));
+    // `x-goog-signature` field is not included in the policy document
+    // `file` field is not included in the policy document
     let policy_document = policy_document::PolicyDocument {
-        conditions: vec![
-            policy_document::Condition::ExactMatching(
-                policy_document::Field::new("bucket").map_err(ErrorKind::Field)?,
-                policy_document::Value::new(bucket_name.clone()),
-            ),
-            policy_document::Condition::ExactMatching(
-                policy_document::Field::new("key").map_err(ErrorKind::Field)?,
-                policy_document::Value::new(object_name.clone()),
-            ),
-            // `policy` field is not included in the policy document
-            policy_document::Condition::ExactMatching(
-                policy_document::Field::new("x-goog-algorithm").map_err(ErrorKind::Field)?,
-                policy_document::Value::new(x_goog_algorithm.as_ref()),
-            ),
-            policy_document::Condition::ExactMatching(
-                policy_document::Field::new("x-goog-credential").map_err(ErrorKind::Field)?,
-                policy_document::Value::new(x_goog_credential.as_str()),
-            ),
-            policy_document::Condition::ExactMatching(
-                policy_document::Field::new("x-goog-date").map_err(ErrorKind::Field)?,
-                policy_document::Value::new(x_goog_date.clone()),
-            ),
-            // `x-goog-signature` field is not included in the policy document
-            // `file` field is not included in the policy document
-        ],
+        conditions,
         expiration: policy_document::Expiration::from_unix_timestamp_obj(
             UnixTimestamp::from_system_time(expires)
                 .map_err(|_| ErrorKind::ExpirationOutOfRange)?,
@@ -147,18 +154,21 @@ pub fn build_html_form_data(
         sign(x_goog_algorithm, signing_key, message.as_bytes()).map_err(ErrorKind::SignedUrl)?;
     let request_signature = hex_encode(&message_digest);
 
-    Ok([
-        ("bucket", bucket_name),
-        ("key", object_name),
-        ("policy", encoded_policy),
-        ("x-goog-algorithm", x_goog_algorithm.as_ref().to_string()),
-        ("x-goog-credential", x_goog_credential),
-        ("x-goog-date", x_goog_date),
-        ("x-goog-signature", request_signature),
-    ]
-    .into_iter()
-    .map(|(name, value)| (name.to_string(), value))
-    .collect::<Vec<(String, String)>>())
+    let mut form_data = vec![];
+    form_data.push(("bucket".to_string(), bucket_name));
+    if let Some(size) = size {
+        form_data.push(("Content-Length".to_string(), size.to_string()));
+    }
+    form_data.push(("key".to_string(), object_name));
+    form_data.push(("policy".to_string(), encoded_policy));
+    form_data.push((
+        "x-goog-algorithm".to_string(),
+        x_goog_algorithm.as_ref().to_string(),
+    ));
+    form_data.push(("x-goog-credential".to_string(), x_goog_credential));
+    form_data.push(("x-goog-date".to_string(), x_goog_date));
+    form_data.push(("x-goog-signature".to_string(), request_signature));
+    Ok(form_data)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
