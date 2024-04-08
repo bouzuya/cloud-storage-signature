@@ -8,6 +8,7 @@
 
 <body>
   <h1>image-uploader</h1>
+  <ul></ul>
   <input type="file" />
   <script>
     // createImage(size: number, type: number): Promise<{
@@ -27,6 +28,24 @@
       if (response.status !== 200) throw new Error("createImage failed");
       const { form_data: formData, method, url } = await response.json();
       return { formData, method, url };
+    }
+
+    // loadImages(): Promise<string[]>
+    async function loadImages() {
+      const url = "/images"
+      const response = await fetch(url, { method: "GET" });
+      if (response.status !== 200) throw new Error("loadImages failed");
+      const responseBody = await response.json();
+      return responseBody;
+    }
+
+    // updateImage(id: string): Promise<void>
+    async function updateImage(id) {
+      const url = `/images/${id}`;
+      const response = await fetch(url, { method: "PATCH" });
+      if (response.status !== 204) throw new Error("updateImage failed");
+      const responseBody = await response.text();
+      if (responseBody !== "") throw new Error("updateImage response body is invalid");
     }
 
     // uploadImage(
@@ -57,13 +76,37 @@
       void (async () => {
         const { formData, method, url } = await createImage(file.size, file.type);
         await uploadImage(url, method, formData, file);
+        await updateImage(formData.find(([name]) => name === "key")[1]);
+        const images = await loadImages();
+        renderListItems(images);
       })();
     }
 
-    function main() {
-      const element = document.querySelector("input[type='file']");
-      if (element === null) throw new Error("input[type='file'] not found");
-      element.addEventListener("change", onChange);
+    // renderListItems(images: string[]): void
+    function renderListItems(images) {
+      const ulElement = document.querySelector("ul");
+      if (ulElement === null) throw new Error("ul not found");
+      for (const node of ulElement.childNodes) ulElement.removeChild(node);
+      for (const image of images) {
+        ulElement.appendChild((() => {
+          const imageElement = document.createElement("img");
+          imageElement.setAttribute("src", image);
+          imageElement.setAttribute("width", "auto");
+          imageElement.setAttribute("height", "128");
+          const liElement = document.createElement("li");
+          liElement.appendChild(imageElement);
+          return liElement;
+        })());
+      }
+    }
+
+    async function main() {
+      const inputElement = document.querySelector("input[type='file']");
+      if (inputElement === null) throw new Error("input[type='file'] not found");
+      inputElement.addEventListener("change", onChange);
+
+      const images = await loadImages();
+      renderListItems(images);
     }
     main();
   </script>
