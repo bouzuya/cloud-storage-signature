@@ -19,7 +19,10 @@
       const response = await fetch("/images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ size, type }),
+        body: JSON.stringify({
+          content_length: size,
+          ...type.length > 0 ? { content_type: type } : {}
+        }),
       });
       if (response.status !== 200) throw new Error("createImage failed");
       const { form_data: formData, method, url } = await response.json();

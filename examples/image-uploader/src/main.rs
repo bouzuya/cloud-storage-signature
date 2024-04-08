@@ -2,8 +2,8 @@ use cloud_storage_signature::BuildHtmlFormDataOptions;
 
 #[derive(serde::Deserialize)]
 struct CreateImageRequestBody {
-    size: u32,
-    r#type: String,
+    content_length: u64,
+    content_type: String,
 }
 
 #[derive(serde::Serialize)]
@@ -22,14 +22,13 @@ async fn create_image(
                 service_account_private_key,
             },
     }): axum::extract::State<AppState>,
-    axum::extract::Json(CreateImageRequestBody { size, r#type }): axum::extract::Json<
-        CreateImageRequestBody,
-    >,
+    axum::extract::Json(CreateImageRequestBody {
+        content_length,
+        content_type,
+    }): axum::extract::Json<CreateImageRequestBody>,
 ) -> Result<axum::Json<CreateImageResponseBody>, axum::http::StatusCode> {
     let method = "POST".to_string();
     let url = format!("https://storage.googleapis.com/{}", bucket_name);
-    // TODO: Use the size and type to generate the form data.
-    println!("size = {}, type = {}", size, r#type);
     let form_data = cloud_storage_signature::build_html_form_data(BuildHtmlFormDataOptions {
         service_account_client_email,
         service_account_private_key,
@@ -38,6 +37,8 @@ async fn create_image(
         region: None,
         expires: std::time::SystemTime::now() + std::time::Duration::from_secs(60),
         accessible_at: None,
+        content_length: Some(content_length),
+        content_type: Some(content_type),
     })
     .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
     Ok(axum::Json(CreateImageResponseBody {
