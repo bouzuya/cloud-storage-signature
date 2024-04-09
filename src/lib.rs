@@ -1,3 +1,4 @@
+mod builder;
 mod private;
 mod service_account_credentials;
 
