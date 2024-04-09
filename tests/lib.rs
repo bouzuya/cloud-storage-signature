@@ -24,6 +24,8 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         accessible_at: None,
+        content_length: None,
+        content_type: None,
     })?;
     let client = reqwest::Client::new();
     let response = client
