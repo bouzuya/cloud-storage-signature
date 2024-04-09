@@ -294,7 +294,7 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().to_string(),
-            r#"invalid type: string "1000000", expected usize at line 1 column 37"#
+            r#"invalid type: string "1000000", expected u64 at line 1 column 37"#
         );
 
         let json = r#"["content-length-range", 0, 1000000, 123]"#;
