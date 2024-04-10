@@ -31,20 +31,22 @@ async fn create_image(
     // create form_data
     let method = "POST".to_string();
     let url = format!("https://storage.googleapis.com/{}", bucket_name);
-    let form_data = cloud_storage_signature::build_html_form_data(
-        cloud_storage_signature::BuildHtmlFormDataOptions {
-            service_account_client_email,
-            service_account_private_key,
-            bucket_name,
-            object_name: id.clone(),
-            region: None,
-            expires: std::time::SystemTime::now() + std::time::Duration::from_secs(60),
+    let form_data = cloud_storage_signature::HtmlFormData::builder()
+        .bucket(bucket_name)
+        .content_length(content_length)
+        .content_type(content_type)
+        .key(id.clone())
+        .policy_document_signing_options(cloud_storage_signature::PolicyDocumentSigningOptions {
             accessible_at: None,
-            content_length: Some(content_length),
-            content_type: Some(content_type),
-        },
-    )
-    .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
+            expiration: std::time::SystemTime::now() + std::time::Duration::from_secs(60),
+            region: None,
+            service_account_client_email: Some(service_account_client_email),
+            service_account_private_key: Some(service_account_private_key),
+            signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+        })
+        .build()
+        .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
+        .into_vec();
 
     // update AppState::images
     let mut images = images
