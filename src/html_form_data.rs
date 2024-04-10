@@ -15,6 +15,8 @@ enum ErrorKind {
     AccessibleAtOutOfRange,
     #[error("bucket not found")]
     BucketNotFound,
+    #[error("expiration before accessible_at")]
+    ExpirationBeforeAccessibleAt,
     #[error("expiration out of range")]
     ExpirationOutOfRange,
     #[error("key not found")]
@@ -269,12 +271,15 @@ impl HtmlFormDataBuilder {
                 service_account_private_key,
                 signing_algorithm,
             }) => {
-                let accessible_at =
-                    UnixTimestamp::from_system_time(accessible_at.unwrap_or_else(SystemTime::now))
-                        .map_err(|_| ErrorKind::AccessibleAtOutOfRange)?;
-                let expiration = UnixTimestamp::from_system_time(*expiration)
+                let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
+                let expiration = *expiration;
+                if expiration <= accessible_at {
+                    return Err(Error::from(ErrorKind::ExpirationBeforeAccessibleAt));
+                }
+                let accessible_at = UnixTimestamp::from_system_time(accessible_at)
+                    .map_err(|_| ErrorKind::AccessibleAtOutOfRange)?;
+                let expiration = UnixTimestamp::from_system_time(expiration)
                     .map_err(|_| ErrorKind::ExpirationOutOfRange)?;
-                // TODO: check accessible_at < expiration
                 let region = region.as_deref().unwrap_or("auto");
                 let bucket = self.bucket.as_deref().ok_or(ErrorKind::BucketNotFound)?;
                 let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
@@ -544,16 +549,16 @@ mod tests {
             .content_encoding("gzip")
             .content_length(1024)
             .content_type("application/octet-stream")
-            .expires("2022-01-01T00:00:00Z")
+            .expires("2022-01-04T00:00:00Z")
             .key("example-object")
             .success_action_redirect("https://example.com/success")
             .success_action_status(201)
-            .x_goog_custom_time("2022-01-01T00:00:00Z")
+            .x_goog_custom_time("2022-01-03T00:00:00Z")
             .x_goog_meta("reviewer", "jane")
             .x_goog_meta("project-manager", "john")
             .policy_document_signing_options(PolicyDocumentSigningOptions {
                 accessible_at: Some(UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time()),
-                expiration: UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time(),
+                expiration: UnixTimestamp::from_rfc3339("2022-01-02T00:00:00Z")?.to_system_time(),
                 region: None,
                 service_account_client_email: Some("test@example.com".to_string()),
                 service_account_private_key: Some("-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n".to_string()),
@@ -570,19 +575,19 @@ mod tests {
             ("Content-Encoding", "gzip"),
             ("Content-Length", "1024"),
             ("Content-Type", "application/octet-stream"),
-            ("Expires", "2022-01-01T00:00:00Z"),
+            ("Expires", "2022-01-04T00:00:00Z"),
             ("key", "example-object"),
-            ("policy", "eyJjb25kaXRpb25zIjpbWyJlcSIsIiRhY2wiLCJwdWJsaWMtcmVhZCJdLFsiZXEiLCIkYnVja2V0IiwiZXhhbXBsZS1idWNrZXQiXSxbImVxIiwiJENhY2hlLUNvbnRyb2wiLCJtYXgtYWdlPTM2MDAiXSxbImVxIiwiJENvbnRlbnQtRGlzcG9zaXRpb24iLCJhdHRhY2htZW50Il0sWyJlcSIsIiRDb250ZW50LUVuY29kaW5nIiwiZ3ppcCJdLFsiY29udGVudC1sZW5ndGgtcmFuZ2UiLDEwMjQsMTAyNF0sWyJlcSIsIiRDb250ZW50LVR5cGUiLCJhcHBsaWNhdGlvbi9vY3RldC1zdHJlYW0iXSxbImVxIiwiJEV4cGlyZXMiLCIyMDIyLTAxLTAxVDAwOjAwOjAwWiJdLFsiZXEiLCIka2V5IiwiZXhhbXBsZS1vYmplY3QiXSxbImVxIiwiJHN1Y2Nlc3NfYWN0aW9uX3JlZGlyZWN0IiwiaHR0cHM6Ly9leGFtcGxlLmNvbS9zdWNjZXNzIl0sWyJlcSIsIiRzdWNjZXNzX2FjdGlvbl9zdGF0dXMiLCIyMDEiXSxbImVxIiwiJHgtZ29vZy1hbGdvcml0aG0iLCJHT09HNC1SU0EtU0hBMjU2Il0sWyJlcSIsIiR4LWdvb2ctY3JlZGVudGlhbCIsInRlc3RAZXhhbXBsZS5jb20vMjAyMjAxMDEvYXV0by9zdG9yYWdlL2dvb2c0X3JlcXVlc3QiXSxbImVxIiwiJHgtZ29vZy1jdXN0b20tdGltZSIsIjIwMjItMDEtMDFUMDA6MDA6MDBaIl0sWyJlcSIsIiR4LWdvb2ctZGF0ZSIsIjIwMjIwMTAxVDAwMDAwMFoiXSxbImVxIiwiJHgtZ29vZy1tZXRhLXJldmlld2VyIiwiamFuZSJdLFsiZXEiLCIkeC1nb29nLW1ldGEtcHJvamVjdC1tYW5hZ2VyIiwiam9obiJdXSwiZXhwaXJhdGlvbiI6IjIwMjItMDEtMDFUMDA6MDA6MDBaIn0="),
+            ("policy", "eyJjb25kaXRpb25zIjpbWyJlcSIsIiRhY2wiLCJwdWJsaWMtcmVhZCJdLFsiZXEiLCIkYnVja2V0IiwiZXhhbXBsZS1idWNrZXQiXSxbImVxIiwiJENhY2hlLUNvbnRyb2wiLCJtYXgtYWdlPTM2MDAiXSxbImVxIiwiJENvbnRlbnQtRGlzcG9zaXRpb24iLCJhdHRhY2htZW50Il0sWyJlcSIsIiRDb250ZW50LUVuY29kaW5nIiwiZ3ppcCJdLFsiY29udGVudC1sZW5ndGgtcmFuZ2UiLDEwMjQsMTAyNF0sWyJlcSIsIiRDb250ZW50LVR5cGUiLCJhcHBsaWNhdGlvbi9vY3RldC1zdHJlYW0iXSxbImVxIiwiJEV4cGlyZXMiLCIyMDIyLTAxLTA0VDAwOjAwOjAwWiJdLFsiZXEiLCIka2V5IiwiZXhhbXBsZS1vYmplY3QiXSxbImVxIiwiJHN1Y2Nlc3NfYWN0aW9uX3JlZGlyZWN0IiwiaHR0cHM6Ly9leGFtcGxlLmNvbS9zdWNjZXNzIl0sWyJlcSIsIiRzdWNjZXNzX2FjdGlvbl9zdGF0dXMiLCIyMDEiXSxbImVxIiwiJHgtZ29vZy1hbGdvcml0aG0iLCJHT09HNC1SU0EtU0hBMjU2Il0sWyJlcSIsIiR4LWdvb2ctY3JlZGVudGlhbCIsInRlc3RAZXhhbXBsZS5jb20vMjAyMjAxMDEvYXV0by9zdG9yYWdlL2dvb2c0X3JlcXVlc3QiXSxbImVxIiwiJHgtZ29vZy1jdXN0b20tdGltZSIsIjIwMjItMDEtMDNUMDA6MDA6MDBaIl0sWyJlcSIsIiR4LWdvb2ctZGF0ZSIsIjIwMjIwMTAxVDAwMDAwMFoiXSxbImVxIiwiJHgtZ29vZy1tZXRhLXJldmlld2VyIiwiamFuZSJdLFsiZXEiLCIkeC1nb29nLW1ldGEtcHJvamVjdC1tYW5hZ2VyIiwiam9obiJdXSwiZXhwaXJhdGlvbiI6IjIwMjItMDEtMDJUMDA6MDA6MDBaIn0="),
             ("success_action_redirect", "https://example.com/success"),
             ("success_action_status", "201"),
             ("x-goog-algorithm", "GOOG4-RSA-SHA256"),
             ("x-goog-credential", "test@example.com/20220101/auto/storage/goog4_request"),
-            ("x-goog-custom-time", "2022-01-01T00:00:00Z"),
+            ("x-goog-custom-time", "2022-01-03T00:00:00Z"),
             ("x-goog-date", "20220101T000000Z"),
-            ("x-goog-signature", "36eb0969cfaea7680570a47afe46d2f633cc0ee2b3de3f533246fda0167200dba93749efe4be86b6b369f8c9e2d0ca34b1df2ed0883aec2a17a46f500b2217e264a1060979091120385e19fdf28f1cfba05fe436ecea02867fe763faa5ebed3eb7d9e248835635be22899d946eff94070b145e5d57f429bc593375ce1e9e2a129f1d044a71e8694b71a39712d0d7985205dc7426d08be318152149e5dedfcaa3e733b7fb14106cd39d304f39c82e91966ba143ed0101f021e4ae3add0809460dafb66e6cf65faba53848f6418dc04bbcdf5e6a50126a3a23c91cf5c8d263d84d5442f48a7963232ae9bb9e43e7f3421343050c43a78ed228a541d66b5f61eb11"),
+            ("x-goog-signature", "0ac0d149c7385dddd8abb7e002ccf35479409b858bedaed2378a87d714d4e68e28eb683c73a5a661372d834a658784a4ccc16f49a0cea8dbfb89e56dd53a98db6d9af0294bfde4a205c8686a3acd35d39ed1f35598ea61f4d339f9f0e6b10a5c26f64094f137e368e78739c837dbfbf6940ce55cf26b86f195bb7277292682cf2ad5b9a1dd452036f969e9c4260c5b0371439ef57f2cc4433354edccb7a71cee29ebfb4ead8b1fddc4faf598bde637f70936052fd37cd3bc1317e39a54381c8f65fb17493130abf3d98323a4c55cdc7f29b1d9a2f1eed08017c36202c8c48550c011a243c22724054ae32b82c86d426fe6db0053fe437fe0af0be44c2869f17f"),
             ("x-goog-meta-reviewer", "jane"),
             ("x-goog-meta-project-manager", "john")
-          ].into_iter().map(|(n,v)| (n.to_string(), v.to_string())).collect::<Vec<(String, String)>>()
+          ].into_iter().map(|(n, v)| (n.to_string(), v.to_string())).collect::<Vec<(String, String)>>()
         );
         Ok(())
     }
