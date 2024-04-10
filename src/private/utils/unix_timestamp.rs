@@ -62,6 +62,10 @@ impl UnixTimestamp {
         chrono_date_time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
     }
 
+    pub(crate) fn to_system_time(self) -> SystemTime {
+        SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(self.0 as u64)
+    }
+
     pub(crate) fn to_iso8601_basic_format_date_time(self) -> String {
         let chrono_date_time =
             chrono::DateTime::from_timestamp(self.0, 0_u32).expect("self.0 to be valid timestamp");
