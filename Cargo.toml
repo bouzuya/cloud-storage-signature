@@ -11,7 +11,7 @@ repository = "https://github.com/bouzuya/cloud-storage-signature"
 
 [dependencies]
 base64 = "0.22.0"
-chrono = "0.4.35"
+chrono = "0.4.37"
 form_urlencoded = "1.2.1"
 http = "1.1.0"
 pem = "3.0.3"
