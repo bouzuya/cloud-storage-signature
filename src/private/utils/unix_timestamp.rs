@@ -18,6 +18,10 @@ enum ErrorKind {
 pub(crate) struct UnixTimestamp(i64);
 
 impl UnixTimestamp {
+    pub(crate) fn now() -> Self {
+        Self::from_system_time(SystemTime::now()).expect("now to be valid")
+    }
+
     pub(crate) fn from_iso8601_basic_format_date_time(s: &str) -> Result<Self, Error> {
         let chrono_date_time = chrono::NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%SZ")
             .map_err(|_| ErrorKind::InvalidIso8601Format(s.to_string()))?
