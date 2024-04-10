@@ -97,7 +97,6 @@ mod tests {
 
     #[test]
     fn test_policy_document() -> anyhow::Result<()> {
-        use crate::policy_document::{Condition, Expiration, Field, PolicyDocument, Value};
         use std::str::FromStr as _;
 
         let json = r#"
@@ -158,7 +157,6 @@ mod tests {
 
     #[test]
     fn test_impl_serialize_policy_document() -> anyhow::Result<()> {
-        use crate::policy_document::{Condition, Expiration, Field, PolicyDocument, Value};
         use std::str::FromStr as _;
 
         let policy_document = PolicyDocument {

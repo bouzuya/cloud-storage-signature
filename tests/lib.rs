@@ -1,12 +1,12 @@
 use std::time::{Duration, SystemTime};
 
-use cloud_storage_signature::{BuildHtmlFormDataOptions, BuildSignedUrlOptions};
-
 #[ignore]
 #[tokio::test]
 async fn test_build_html_form_data() -> anyhow::Result<()> {
-    use cloud_storage_signature::build_html_form_data;
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
+    use cloud_storage_signature::HtmlFormData;
+    use cloud_storage_signature::PolicyDocumentSigningOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let ServiceAccountCredentials {
@@ -16,17 +16,19 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "foo";
 
-    let form_params = build_html_form_data(BuildHtmlFormDataOptions {
-        service_account_client_email: service_account_client_email.clone(),
-        service_account_private_key: service_account_private_key.clone(),
-        bucket_name: bucket_name.clone(),
-        object_name: object_name.to_string(),
-        region: None,
-        expires: SystemTime::now() + Duration::from_secs(2),
-        accessible_at: None,
-        content_length: None,
-        content_type: None,
-    })?;
+    let form_params = HtmlFormData::builder()
+        .bucket(&bucket_name)
+        .key(object_name)
+        .policy_document_signing_options(PolicyDocumentSigningOptions {
+            accessible_at: None,
+            expiration: SystemTime::now() + Duration::from_secs(2),
+            region: None,
+            signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+            service_account_client_email: Some(service_account_client_email.clone()),
+            service_account_private_key: Some(service_account_private_key.clone()),
+        })
+        .build()?
+        .into_vec();
     let client = reqwest::Client::new();
     let response = client
         .post(format!("https://storage.googleapis.com/{}", bucket_name))
@@ -69,6 +71,7 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_setup_a_txt() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
@@ -123,6 +126,7 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_get() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
@@ -154,6 +158,7 @@ async fn test_get() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_get_timeout() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
@@ -186,6 +191,7 @@ async fn test_get_timeout() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_post_invalid_http_method() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
@@ -216,6 +222,7 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_post() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
@@ -263,6 +270,7 @@ async fn test_post() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_post_bin() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
+    use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;

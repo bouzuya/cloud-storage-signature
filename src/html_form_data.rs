@@ -68,6 +68,8 @@ pub struct HtmlFormDataBuilder {
     cache_control: Option<String>,
     content_disposition: Option<String>,
     content_encoding: Option<String>,
+    // max content-length size is 5 TiB
+    // <https://cloud.google.com/storage/quotas#objects>
     content_length: Option<u64>,
     content_type: Option<String>,
     expires: Option<String>,
