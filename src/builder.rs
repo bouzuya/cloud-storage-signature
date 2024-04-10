@@ -7,14 +7,14 @@ use crate::private::{
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
-struct Error(#[from] ErrorKind);
+pub struct Error(#[from] ErrorKind);
 
 #[derive(Debug, thiserror::Error)]
 enum ErrorKind {
+    #[error("accessible_at out of range")]
+    AccessibleAtOutOfRange,
     #[error("bucket not found")]
     BucketNotFound,
-    #[error("expiration not found")]
-    ExpirationNotFound,
     #[error("expiration out of range")]
     ExpirationOutOfRange,
     #[error("key not found")]
@@ -29,20 +29,16 @@ enum ErrorKind {
     ServiceAccountPrivateKeyParsing,
     #[error(transparent)]
     Sign(crate::private::signed_url::Error),
-    #[error("x-goog-algorithm not found")]
-    XGoogAlgorithmNotFound,
     #[error("x-goog-algorithm not supported")]
     XGoogAlgorithmNotSupported,
     #[error("x-goog-credential invalid")]
     XGoogCredentialInvalid(crate::private::credential_scope::Error),
-    #[error("x-goog-date is not iso8601 basic format")]
-    XGoogDateNotIso8601Format(crate::private::utils::unix_timestamp::Error),
     #[error("x-goog-meta-* field name is empty")]
     XGoogMetaNameEmpty,
 }
 
 #[derive(Clone, Debug)]
-struct HtmlFormData(Vec<(String, String)>);
+pub struct HtmlFormData(Vec<(String, String)>);
 
 impl HtmlFormData {
     pub fn builder() -> HtmlFormDataBuilder {
@@ -54,8 +50,17 @@ impl HtmlFormData {
     }
 }
 
+pub struct PolicyDocumentSigningOptions {
+    pub accessible_at: Option<SystemTime>,
+    pub expiration: SystemTime,
+    pub region: Option<String>,
+    pub service_account_client_email: Option<String>,
+    pub service_account_private_key: Option<String>,
+    pub signing_algorithm: String,
+}
+
 #[derive(Default)]
-struct HtmlFormDataBuilder {
+pub struct HtmlFormDataBuilder {
     acl: Option<String>,
     bucket: Option<String>,
     cache_control: Option<String>,
@@ -63,23 +68,18 @@ struct HtmlFormDataBuilder {
     content_encoding: Option<String>,
     content_length: Option<u64>,
     content_type: Option<String>,
-    /// `expiration` is not a field name.
-    expiration: Option<SystemTime>,
     expires: Option<String>,
     // `file` field is not included.
     key: Option<String>,
-    policy: bool,
-    /// `service_account_client_email` is not a field name.
-    service_account_client_email: Option<String>,
-    /// `service_account_private_key` is not a field name.
-    service_account_private_key: Option<String>,
+    // `policy_document_sining_options` is not HTML form data field.
+    policy_document_signing_options: Option<PolicyDocumentSigningOptions>,
     success_action_redirect: Option<String>,
     success_action_status: Option<u16>,
-    x_goog_algorithm: Option<String>,
-    x_goog_credential: Option<String>,
+    // `x-goog-algorithm` field is not included. It is calculated from the policy_document_signing_options.
+    // `x-goog-credential` field is not included. It is calculated from the policy_document_signing_options.
     x_goog_custom_time: Option<String>,
-    x_goog_date: Option<String>,
-    // `x-goog-signature` field is not included.
+    // `x-goog-date` field is not included. It is calculated from the policy_document_signing_options.
+    // `x-goog-signature` field is not included. It is calculated from the policy_document_signing_options.
     x_goog_meta: Vec<(String, String)>,
 }
 
@@ -196,12 +196,6 @@ impl HtmlFormDataBuilder {
         self
     }
 
-    /// Sets the `expiration` to use for policy_document.
-    pub fn expiration(mut self, expiration: SystemTime) -> Self {
-        self.expiration = Some(expiration);
-        self
-    }
-
     /// Sets the `Expires` field.
     pub fn expires(mut self, expires: impl Into<String>) -> Self {
         self.expires = Some(expires.into());
@@ -214,27 +208,12 @@ impl HtmlFormDataBuilder {
         self
     }
 
-    /// Sets the `policy` field.
-    pub fn policy(mut self, use_policy: bool) -> Self {
-        self.policy = use_policy;
-        self
-    }
-
-    /// Sets the `service_account_client_email` to use for signing.
-    pub fn service_account_client_email(
+    /// Sets the `policy` field, `x-goog-algorithm` field, `x-goog-credential` field, `x-goog-date` field, and `x-goog-signature` field.
+    pub fn policy_document_signing_options(
         mut self,
-        service_account_client_email: impl Into<String>,
+        policy_document_signing_options: PolicyDocumentSigningOptions,
     ) -> Self {
-        self.service_account_client_email = Some(service_account_client_email.into());
-        self
-    }
-
-    /// Sets the `service_account_private_key` to use for signing.
-    pub fn service_account_private_key(
-        mut self,
-        service_account_private_key: impl Into<String>,
-    ) -> Self {
-        self.service_account_private_key = Some(service_account_private_key.into());
+        self.policy_document_signing_options = Some(policy_document_signing_options);
         self
     }
 
@@ -250,27 +229,9 @@ impl HtmlFormDataBuilder {
         self
     }
 
-    /// Sets the `x-goog-algorithm` field.
-    pub fn x_goog_algorithm(mut self, x_goog_algorithm: impl Into<String>) -> Self {
-        self.x_goog_algorithm = Some(x_goog_algorithm.into());
-        self
-    }
-
-    /// Sets the `x-goog-credential` field.
-    pub fn x_goog_credential(mut self, x_goog_credential: impl Into<String>) -> Self {
-        self.x_goog_credential = Some(x_goog_credential.into());
-        self
-    }
-
     /// Sets the `x-goog-custom-time` field.
     pub fn x_goog_custom_time(mut self, x_goog_custom_time: impl Into<String>) -> Self {
         self.x_goog_custom_time = Some(x_goog_custom_time.into());
-        self
-    }
-
-    /// Sets the `x-goog-date` field.
-    pub fn x_goog_date(mut self, x_goog_date: impl Into<String>) -> Self {
-        self.x_goog_date = Some(x_goog_date.into());
         self
     }
 
@@ -298,196 +259,187 @@ impl HtmlFormDataBuilder {
         ),
         Error,
     > {
-        if !self.policy {
-            return Ok((
-                None,
-                self.x_goog_algorithm.clone(),
-                self.x_goog_credential.clone(),
-                self.x_goog_date.clone(),
-                None,
-            ));
-        }
-        let x_goog_date = self
-            .x_goog_date
-            .as_deref()
-            .map(UnixTimestamp::from_iso8601_basic_format_date_time)
-            .transpose()
-            .map_err(ErrorKind::XGoogDateNotIso8601Format)?
-            .unwrap_or_else(UnixTimestamp::now);
-        let bucket = self.bucket.as_deref().ok_or(ErrorKind::BucketNotFound)?;
-        let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
-        let x_goog_algorithm = self
-            .x_goog_algorithm
-            .as_deref()
-            .ok_or(ErrorKind::XGoogAlgorithmNotFound)?;
-        if x_goog_algorithm != "GOOG4-RSA-SHA256" {
-            return Err(Error::from(ErrorKind::XGoogAlgorithmNotSupported));
-        }
-        let service_account_client_email = self
-            .service_account_client_email
-            .as_deref()
-            .ok_or(ErrorKind::ServiceAccountClientEmailNotFound)?;
-        let x_goog_credential = self
-            .x_goog_credential
-            .as_deref()
-            .map(ToString::to_string)
-            .map(Result::<_, Error>::Ok)
-            .unwrap_or_else(|| {
+        match self.policy_document_signing_options.as_ref() {
+            None => Ok((None, None, None, None, None)),
+            Some(PolicyDocumentSigningOptions {
+                accessible_at,
+                expiration,
+                region,
+                service_account_client_email,
+                service_account_private_key,
+                signing_algorithm,
+            }) => {
+                let accessible_at =
+                    UnixTimestamp::from_system_time(accessible_at.unwrap_or_else(SystemTime::now))
+                        .map_err(|_| ErrorKind::AccessibleAtOutOfRange)?;
+                let expiration = UnixTimestamp::from_system_time(*expiration)
+                    .map_err(|_| ErrorKind::ExpirationOutOfRange)?;
+                // TODO: check accessible_at < expiration
+                let region = region.as_deref().unwrap_or("auto");
+                let bucket = self.bucket.as_deref().ok_or(ErrorKind::BucketNotFound)?;
+                let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
+                let x_goog_algorithm = signing_algorithm;
+                // TODO: x_goog_algorithm "GOOG4-HMAC-SHA256" is not supported yet
+                if x_goog_algorithm != "GOOG4-RSA-SHA256" {
+                    return Err(Error::from(ErrorKind::XGoogAlgorithmNotSupported));
+                }
+
+                let service_account_client_email = service_account_client_email
+                    .as_deref()
+                    .ok_or(ErrorKind::ServiceAccountClientEmailNotFound)?;
+                let service_account_private_key = service_account_private_key
+                    .as_deref()
+                    .ok_or(ErrorKind::ServiceAccountPrivateKeyNotFound)?;
+
                 let credential_scope = CredentialScope::new(
-                    Date::from_unix_timestamp_obj(x_goog_date),
-                    Location::try_from("auto").expect("auto to be valid"),
+                    Date::from_unix_timestamp_obj(accessible_at),
+                    Location::try_from(region).expect("region to be valid location"),
                     Service::Storage,
                     RequestType::Goog4Request,
                 )
                 .map_err(ErrorKind::XGoogCredentialInvalid)?;
-                Ok(format!(
-                    "{}/{}",
-                    service_account_client_email, credential_scope
+                let x_goog_credential =
+                    format!("{}/{}", service_account_client_email, credential_scope);
+                let x_goog_date = accessible_at.to_iso8601_basic_format_date_time();
+                let expiration = policy_document::Expiration::from_unix_timestamp_obj(expiration);
+
+                let mut conditions = vec![];
+                if let Some(acl) = self.acl.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("acl").expect("acl to be valid field name"),
+                        policy_document::Value::new(acl),
+                    ));
+                }
+                conditions.push(policy_document::Condition::ExactMatching(
+                    policy_document::Field::new("bucket").expect("bucket to be valid field name"),
+                    policy_document::Value::new(bucket),
+                ));
+                if let Some(cache_control) = self.cache_control.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("Cache-Control")
+                            .expect("Cache-Control to be valid field name"),
+                        policy_document::Value::new(cache_control),
+                    ));
+                }
+                if let Some(content_disposition) = self.content_disposition.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("Content-Disposition")
+                            .expect("Content-Disposition to be valid field name"),
+                        policy_document::Value::new(content_disposition),
+                    ));
+                }
+                if let Some(content_encoding) = self.content_encoding.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("Content-Encoding")
+                            .expect("Content-Encoding to be valid field name"),
+                        policy_document::Value::new(content_encoding),
+                    ));
+                }
+                if let Some(content_length) = self.content_length {
+                    conditions.push(policy_document::Condition::ContentLengthRange(
+                        content_length,
+                        content_length,
+                    ));
+                }
+                if let Some(content_type) = self.content_type.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("Content-Type")
+                            .expect("Content-Type to be valid field name"),
+                        policy_document::Value::new(content_type),
+                    ));
+                }
+                if let Some(expires) = self.expires.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("Expires")
+                            .expect("Expires to be valid field name"),
+                        policy_document::Value::new(expires),
+                    ));
+                }
+                conditions.push(policy_document::Condition::ExactMatching(
+                    policy_document::Field::new("key").expect("key to be valid field name"),
+                    policy_document::Value::new(key),
+                ));
+                // `policy` field is not included in the policy document
+                if let Some(success_action_redirect) = self.success_action_redirect.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("success_action_redirect")
+                            .expect("success_action_redirect to be valid field name"),
+                        policy_document::Value::new(success_action_redirect),
+                    ));
+                }
+                if let Some(success_action_status) = self.success_action_status {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("success_action_status")
+                            .expect("success_action_status to be valid field name"),
+                        policy_document::Value::new(success_action_status.to_string()),
+                    ));
+                }
+                conditions.push(policy_document::Condition::ExactMatching(
+                    policy_document::Field::new("x-goog-algorithm")
+                        .expect("x-goog-algorithm to be valid field name"),
+                    policy_document::Value::new(x_goog_algorithm),
+                ));
+                conditions.push(policy_document::Condition::ExactMatching(
+                    policy_document::Field::new("x-goog-credential")
+                        .expect("x-goog-credential to be valid field name"),
+                    policy_document::Value::new(x_goog_credential.clone()),
+                ));
+                if let Some(x_goog_custom_time) = self.x_goog_custom_time.as_ref() {
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new("x-goog-custom-time")
+                            .expect("x-goog-custom-time to be valid field name"),
+                        policy_document::Value::new(x_goog_custom_time),
+                    ));
+                }
+                conditions.push(policy_document::Condition::ExactMatching(
+                    policy_document::Field::new("x-goog-date")
+                        .expect("x-goog-date to be valid field name"),
+                    policy_document::Value::new(x_goog_date.clone()),
+                ));
+                // `x-goog-signature` field is not included in the policy document
+                for (name, value) in &self.x_goog_meta {
+                    if name.is_empty() {
+                        return Err(Error::from(ErrorKind::XGoogMetaNameEmpty));
+                    }
+                    conditions.push(policy_document::Condition::ExactMatching(
+                        policy_document::Field::new(format!("x-goog-meta-{}", name))
+                            .expect("x-goog-meta-* to be valid field name"),
+                        policy_document::Value::new(value),
+                    ));
+                }
+                // `file` field is not included in the policy document
+                let policy_document = policy_document::PolicyDocument {
+                    conditions,
+                    expiration,
+                };
+
+                let policy = serde_json::to_string(&policy_document)
+                    .map_err(|_| ErrorKind::PolicyDocumentSerialization)?;
+                let encoded_policy = base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    policy.as_bytes(),
+                );
+                let message = encoded_policy.as_str();
+                let pkcs8 = pem::parse(service_account_private_key.as_bytes())
+                    .map_err(|_| ErrorKind::ServiceAccountPrivateKeyParsing)?;
+                let signing_key = pkcs8.contents();
+                let message_digest = sign(
+                    SigningAlgorithm::Goog4RsaSha256,
+                    signing_key,
+                    message.as_bytes(),
+                )
+                .map_err(ErrorKind::Sign)?;
+                let x_goog_signature = hex_encode(&message_digest);
+
+                Ok((
+                    Some(encoded_policy),
+                    Some(x_goog_algorithm.to_string()),
+                    Some(x_goog_credential),
+                    Some(x_goog_date),
+                    Some(x_goog_signature),
                 ))
-            })?;
-        let x_goog_date = x_goog_date.to_iso8601_basic_format_date_time();
-        let expiration = self.expiration.ok_or(ErrorKind::ExpirationNotFound)?;
-        let expiration = UnixTimestamp::from_system_time(expiration)
-            .map_err(|_| ErrorKind::ExpirationOutOfRange)?;
-        let expiration = policy_document::Expiration::from_unix_timestamp_obj(expiration);
-        let service_account_private_key = self
-            .service_account_private_key
-            .as_deref()
-            .ok_or(ErrorKind::ServiceAccountPrivateKeyNotFound)?;
-
-        let mut conditions = vec![];
-        if let Some(acl) = self.acl.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("acl").expect("acl to be valid field name"),
-                policy_document::Value::new(acl),
-            ));
-        }
-        conditions.push(policy_document::Condition::ExactMatching(
-            policy_document::Field::new("bucket").expect("bucket to be valid field name"),
-            policy_document::Value::new(bucket),
-        ));
-        if let Some(cache_control) = self.cache_control.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("Cache-Control")
-                    .expect("Cache-Control to be valid field name"),
-                policy_document::Value::new(cache_control),
-            ));
-        }
-        if let Some(content_disposition) = self.content_disposition.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("Content-Disposition")
-                    .expect("Content-Disposition to be valid field name"),
-                policy_document::Value::new(content_disposition),
-            ));
-        }
-        if let Some(content_encoding) = self.content_encoding.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("Content-Encoding")
-                    .expect("Content-Encoding to be valid field name"),
-                policy_document::Value::new(content_encoding),
-            ));
-        }
-        if let Some(content_length) = self.content_length {
-            conditions.push(policy_document::Condition::ContentLengthRange(
-                content_length,
-                content_length,
-            ));
-        }
-        if let Some(content_type) = self.content_type.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("Content-Type")
-                    .expect("Content-Type to be valid field name"),
-                policy_document::Value::new(content_type),
-            ));
-        }
-        if let Some(expires) = self.expires.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("Expires").expect("Expires to be valid field name"),
-                policy_document::Value::new(expires),
-            ));
-        }
-        conditions.push(policy_document::Condition::ExactMatching(
-            policy_document::Field::new("key").expect("key to be valid field name"),
-            policy_document::Value::new(key),
-        ));
-        // `policy` field is not included in the policy document
-        if let Some(success_action_redirect) = self.success_action_redirect.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("success_action_redirect")
-                    .expect("success_action_redirect to be valid field name"),
-                policy_document::Value::new(success_action_redirect),
-            ));
-        }
-        if let Some(success_action_status) = self.success_action_status {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("success_action_status")
-                    .expect("success_action_status to be valid field name"),
-                policy_document::Value::new(success_action_status.to_string()),
-            ));
-        }
-        conditions.push(policy_document::Condition::ExactMatching(
-            policy_document::Field::new("x-goog-algorithm")
-                .expect("x-goog-algorithm to be valid field name"),
-            policy_document::Value::new(x_goog_algorithm),
-        ));
-        conditions.push(policy_document::Condition::ExactMatching(
-            policy_document::Field::new("x-goog-credential")
-                .expect("x-goog-credential to be valid field name"),
-            policy_document::Value::new(x_goog_credential.clone()),
-        ));
-        if let Some(x_goog_custom_time) = self.x_goog_custom_time.as_ref() {
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new("x-goog-custom-time")
-                    .expect("x-goog-custom-time to be valid field name"),
-                policy_document::Value::new(x_goog_custom_time),
-            ));
-        }
-        conditions.push(policy_document::Condition::ExactMatching(
-            policy_document::Field::new("x-goog-date").expect("x-goog-date to be valid field name"),
-            policy_document::Value::new(x_goog_date.clone()),
-        ));
-        // `x-goog-signature` field is not included in the policy document
-        for (name, value) in &self.x_goog_meta {
-            if name.is_empty() {
-                return Err(Error::from(ErrorKind::XGoogMetaNameEmpty));
             }
-            conditions.push(policy_document::Condition::ExactMatching(
-                policy_document::Field::new(format!("x-goog-meta-{}", name))
-                    .expect("x-goog-meta-* to be valid field name"),
-                policy_document::Value::new(value),
-            ));
         }
-        // `file` field is not included in the policy document
-        let policy_document = policy_document::PolicyDocument {
-            conditions,
-            expiration,
-        };
-
-        let policy = serde_json::to_string(&policy_document)
-            .map_err(|_| ErrorKind::PolicyDocumentSerialization)?;
-        let encoded_policy = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            policy.as_bytes(),
-        );
-        let message = encoded_policy.as_str();
-        let pkcs8 = pem::parse(service_account_private_key.as_bytes())
-            .map_err(|_| ErrorKind::ServiceAccountPrivateKeyParsing)?;
-        let signing_key = pkcs8.contents();
-        let message_digest = sign(
-            SigningAlgorithm::Goog4RsaSha256,
-            signing_key,
-            message.as_bytes(),
-        )
-        .map_err(ErrorKind::Sign)?;
-        let x_goog_signature = hex_encode(&message_digest);
-
-        Ok((
-            Some(encoded_policy),
-            Some(x_goog_algorithm.to_string()),
-            Some(x_goog_credential),
-            Some(x_goog_date),
-            Some(x_goog_signature),
-        ))
     }
 }
 
@@ -594,21 +546,19 @@ mod tests {
             .content_type("application/octet-stream")
             .expires("2022-01-01T00:00:00Z")
             .key("example-object")
-            .policy(true)
             .success_action_redirect("https://example.com/success")
             .success_action_status(201)
-            .x_goog_algorithm("GOOG4-RSA-SHA256")
-            // .x_goog_credential is optional
-            // .x_goog_credential("test@example.com/20220101/auto/storage/goog4_request")
             .x_goog_custom_time("2022-01-01T00:00:00Z")
-            // .x_goog_date is optional
-            .x_goog_date("20220101T000000Z")
             .x_goog_meta("reviewer", "jane")
             .x_goog_meta("project-manager", "john")
-            // non field parameters
-            .expiration(UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time())
-            .service_account_client_email("test@example.com")
-            .service_account_private_key("-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n")
+            .policy_document_signing_options(PolicyDocumentSigningOptions {
+                accessible_at: Some(UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time()),
+                expiration: UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time(),
+                region: None,
+                service_account_client_email: Some("test@example.com".to_string()),
+                service_account_private_key: Some("-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n".to_string()),
+                signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+            })
             .build()?;
         assert_eq!(
           form_data.into_vec(),
