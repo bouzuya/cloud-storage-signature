@@ -1,6 +1,9 @@
 use std::time::SystemTime;
 
-use crate::private::{hex_encode, policy_document, sign, utils::UnixTimestamp, SigningAlgorithm};
+use crate::private::{
+    hex_encode, policy_document, sign, utils::UnixTimestamp, CredentialScope, Date, Location,
+    RequestType, Service, SigningAlgorithm,
+};
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -18,6 +21,8 @@ enum ErrorKind {
     KeyNotFound,
     #[error("policy document serialization")]
     PolicyDocumentSerialization,
+    #[error("service account client email not found")]
+    ServiceAccountClientEmailNotFound,
     #[error("service account private key not found")]
     ServiceAccountPrivateKeyNotFound,
     #[error("service account private key parsing")]
@@ -28,10 +33,10 @@ enum ErrorKind {
     XGoogAlgorithmNotFound,
     #[error("x-goog-algorithm not supported")]
     XGoogAlgorithmNotSupported,
-    #[error("x-goog-credential not found")]
-    XGoogCredentialNotFound,
-    #[error("x-goog-date not found")]
-    XGoogDateNotFound,
+    #[error("x-goog-credential invalid")]
+    XGoogCredentialInvalid(crate::private::credential_scope::Error),
+    #[error("x-goog-date is not iso8601 basic format")]
+    XGoogDateNotIso8601Format(crate::private::utils::unix_timestamp::Error),
     #[error("x-goog-meta-* field name is empty")]
     XGoogMetaNameEmpty,
 }
@@ -64,6 +69,8 @@ struct HtmlFormDataBuilder {
     // `file` field is not included.
     key: Option<String>,
     policy: bool,
+    /// `service_account_client_email` is not a field name.
+    service_account_client_email: Option<String>,
     /// `service_account_private_key` is not a field name.
     service_account_private_key: Option<String>,
     success_action_redirect: Option<String>,
@@ -91,12 +98,8 @@ impl HtmlFormDataBuilder {
 
     /// Builds the `HtmlFormData`.
     pub fn build(self) -> Result<HtmlFormData, Error> {
-        let (policy, x_goog_signature) = if !self.policy {
-            (None, None)
-        } else {
-            let (policy, x_goog_signature) = self.build_policy_and_x_goog_signature()?;
-            (Some(policy), Some(x_goog_signature))
-        };
+        let (policy, x_goog_algorithm, x_goog_credential, x_goog_date, x_goog_signature) =
+            self.build_policy_and_x_goog_signature()?;
 
         let mut vec = vec![];
         if let Some(acl) = self.acl {
@@ -139,16 +142,16 @@ impl HtmlFormDataBuilder {
                 success_action_status.to_string(),
             ));
         }
-        if let Some(x_goog_algorithm) = self.x_goog_algorithm {
+        if let Some(x_goog_algorithm) = x_goog_algorithm {
             vec.push(("x-goog-algorithm".to_string(), x_goog_algorithm));
         }
-        if let Some(x_goog_credential) = self.x_goog_credential {
+        if let Some(x_goog_credential) = x_goog_credential {
             vec.push(("x-goog-credential".to_string(), x_goog_credential));
         }
         if let Some(x_goog_custom_time) = self.x_goog_custom_time {
             vec.push(("x-goog-custom-time".to_string(), x_goog_custom_time));
         }
-        if let Some(x_goog_date) = self.x_goog_date {
+        if let Some(x_goog_date) = x_goog_date {
             vec.push(("x-goog-date".to_string(), x_goog_date));
         }
         if let Some(x_goog_signature) = x_goog_signature {
@@ -193,6 +196,12 @@ impl HtmlFormDataBuilder {
         self
     }
 
+    /// Sets the `expiration` to use for policy_document.
+    pub fn expiration(mut self, expiration: SystemTime) -> Self {
+        self.expiration = Some(expiration);
+        self
+    }
+
     /// Sets the `Expires` field.
     pub fn expires(mut self, expires: impl Into<String>) -> Self {
         self.expires = Some(expires.into());
@@ -208,6 +217,24 @@ impl HtmlFormDataBuilder {
     /// Sets the `policy` field.
     pub fn policy(mut self, use_policy: bool) -> Self {
         self.policy = use_policy;
+        self
+    }
+
+    /// Sets the `service_account_client_email` to use for signing.
+    pub fn service_account_client_email(
+        mut self,
+        service_account_client_email: impl Into<String>,
+    ) -> Self {
+        self.service_account_client_email = Some(service_account_client_email.into());
+        self
+    }
+
+    /// Sets the `service_account_private_key` to use for signing.
+    pub fn service_account_private_key(
+        mut self,
+        service_account_private_key: impl Into<String>,
+    ) -> Self {
+        self.service_account_private_key = Some(service_account_private_key.into());
         self
     }
 
@@ -253,30 +280,76 @@ impl HtmlFormDataBuilder {
         self
     }
 
-    fn build_policy_and_x_goog_signature(&self) -> Result<(String, String), Error> {
-        assert!(self.policy);
+    // .0: policy
+    // .1: x-goog-algorithm
+    // .2: x-goog-credential
+    // .3: x-goog-date
+    // .4: x-goog-signature
+    #[allow(clippy::type_complexity)]
+    fn build_policy_and_x_goog_signature(
+        &self,
+    ) -> Result<
+        (
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+            Option<String>,
+        ),
+        Error,
+    > {
+        if !self.policy {
+            return Ok((
+                None,
+                self.x_goog_algorithm.clone(),
+                self.x_goog_credential.clone(),
+                self.x_goog_date.clone(),
+                None,
+            ));
+        }
+        let x_goog_date = self
+            .x_goog_date
+            .as_deref()
+            .map(UnixTimestamp::from_iso8601_basic_format_date_time)
+            .transpose()
+            .map_err(ErrorKind::XGoogDateNotIso8601Format)?
+            .unwrap_or_else(UnixTimestamp::now);
         let bucket = self.bucket.as_deref().ok_or(ErrorKind::BucketNotFound)?;
         let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
         let x_goog_algorithm = self
             .x_goog_algorithm
             .as_deref()
             .ok_or(ErrorKind::XGoogAlgorithmNotFound)?;
-        // TODO: build it from service_account_client_email and credential_scope
-        let x_goog_credential = self
-            .x_goog_credential
-            .as_deref()
-            .ok_or(ErrorKind::XGoogCredentialNotFound)?;
-        let x_goog_date = self
-            .x_goog_date
-            .as_deref()
-            .ok_or(ErrorKind::XGoogDateNotFound)?;
-        let expiration = policy_document::Expiration::from_unix_timestamp_obj(
-            UnixTimestamp::from_system_time(self.expiration.ok_or(ErrorKind::ExpirationNotFound)?)
-                .map_err(|_| ErrorKind::ExpirationOutOfRange)?,
-        );
         if x_goog_algorithm != "GOOG4-RSA-SHA256" {
             return Err(Error::from(ErrorKind::XGoogAlgorithmNotSupported));
         }
+        let service_account_client_email = self
+            .service_account_client_email
+            .as_deref()
+            .ok_or(ErrorKind::ServiceAccountClientEmailNotFound)?;
+        let x_goog_credential = self
+            .x_goog_credential
+            .as_deref()
+            .map(ToString::to_string)
+            .map(Result::<_, Error>::Ok)
+            .unwrap_or_else(|| {
+                let credential_scope = CredentialScope::new(
+                    Date::from_unix_timestamp_obj(x_goog_date),
+                    Location::try_from("auto").expect("auto to be valid"),
+                    Service::Storage,
+                    RequestType::Goog4Request,
+                )
+                .map_err(ErrorKind::XGoogCredentialInvalid)?;
+                Ok(format!(
+                    "{}/{}",
+                    service_account_client_email, credential_scope
+                ))
+            })?;
+        let x_goog_date = x_goog_date.to_iso8601_basic_format_date_time();
+        let expiration = self.expiration.ok_or(ErrorKind::ExpirationNotFound)?;
+        let expiration = UnixTimestamp::from_system_time(expiration)
+            .map_err(|_| ErrorKind::ExpirationOutOfRange)?;
+        let expiration = policy_document::Expiration::from_unix_timestamp_obj(expiration);
         let service_account_private_key = self
             .service_account_private_key
             .as_deref()
@@ -360,7 +433,7 @@ impl HtmlFormDataBuilder {
         conditions.push(policy_document::Condition::ExactMatching(
             policy_document::Field::new("x-goog-credential")
                 .expect("x-goog-credential to be valid field name"),
-            policy_document::Value::new(x_goog_credential),
+            policy_document::Value::new(x_goog_credential.clone()),
         ));
         if let Some(x_goog_custom_time) = self.x_goog_custom_time.as_ref() {
             conditions.push(policy_document::Condition::ExactMatching(
@@ -371,7 +444,7 @@ impl HtmlFormDataBuilder {
         }
         conditions.push(policy_document::Condition::ExactMatching(
             policy_document::Field::new("x-goog-date").expect("x-goog-date to be valid field name"),
-            policy_document::Value::new(x_goog_date),
+            policy_document::Value::new(x_goog_date.clone()),
         ));
         // `x-goog-signature` field is not included in the policy document
         for (name, value) in &self.x_goog_meta {
@@ -408,7 +481,13 @@ impl HtmlFormDataBuilder {
         .map_err(ErrorKind::Sign)?;
         let x_goog_signature = hex_encode(&message_digest);
 
-        Ok((encoded_policy, x_goog_signature))
+        Ok((
+            Some(encoded_policy),
+            Some(x_goog_algorithm.to_string()),
+            Some(x_goog_credential),
+            Some(x_goog_date),
+            Some(x_goog_signature),
+        ))
     }
 }
 
@@ -448,7 +527,7 @@ mod tests {
     }
 
     #[test]
-    fn test_no_policy() -> anyhow::Result<()> {
+    fn test_when_policy_is_false() -> anyhow::Result<()> {
         let form_data = HtmlFormData::builder()
             .acl("public-read")
             .bucket("example-bucket")
@@ -499,6 +578,61 @@ mod tests {
                     "john".to_string()
                 )
             ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_when_policy_is_true() -> anyhow::Result<()> {
+        let form_data = HtmlFormData::builder()
+            .acl("public-read")
+            .bucket("example-bucket")
+            .cache_control("max-age=3600")
+            .content_disposition("attachment")
+            .content_encoding("gzip")
+            .content_length(1024)
+            .content_type("application/octet-stream")
+            .expires("2022-01-01T00:00:00Z")
+            .key("example-object")
+            .policy(true)
+            .success_action_redirect("https://example.com/success")
+            .success_action_status(201)
+            .x_goog_algorithm("GOOG4-RSA-SHA256")
+            // .x_goog_credential is optional
+            // .x_goog_credential("test@example.com/20220101/auto/storage/goog4_request")
+            .x_goog_custom_time("2022-01-01T00:00:00Z")
+            // .x_goog_date is optional
+            .x_goog_date("20220101T000000Z")
+            .x_goog_meta("reviewer", "jane")
+            .x_goog_meta("project-manager", "john")
+            // non field parameters
+            .expiration(UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time())
+            .service_account_client_email("test@example.com")
+            .service_account_private_key("-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n")
+            .build()?;
+        assert_eq!(
+          form_data.into_vec(),
+          [
+            ("acl", "public-read"),
+            ("bucket", "example-bucket"),
+            ("Cache-Control", "max-age=3600"),
+            ("Content-Disposition", "attachment"),
+            ("Content-Encoding", "gzip"),
+            ("Content-Length", "1024"),
+            ("Content-Type", "application/octet-stream"),
+            ("Expires", "2022-01-01T00:00:00Z"),
+            ("key", "example-object"),
+            ("policy", "eyJjb25kaXRpb25zIjpbWyJlcSIsIiRhY2wiLCJwdWJsaWMtcmVhZCJdLFsiZXEiLCIkYnVja2V0IiwiZXhhbXBsZS1idWNrZXQiXSxbImVxIiwiJENhY2hlLUNvbnRyb2wiLCJtYXgtYWdlPTM2MDAiXSxbImVxIiwiJENvbnRlbnQtRGlzcG9zaXRpb24iLCJhdHRhY2htZW50Il0sWyJlcSIsIiRDb250ZW50LUVuY29kaW5nIiwiZ3ppcCJdLFsiY29udGVudC1sZW5ndGgtcmFuZ2UiLDEwMjQsMTAyNF0sWyJlcSIsIiRDb250ZW50LVR5cGUiLCJhcHBsaWNhdGlvbi9vY3RldC1zdHJlYW0iXSxbImVxIiwiJEV4cGlyZXMiLCIyMDIyLTAxLTAxVDAwOjAwOjAwWiJdLFsiZXEiLCIka2V5IiwiZXhhbXBsZS1vYmplY3QiXSxbImVxIiwiJHN1Y2Nlc3NfYWN0aW9uX3JlZGlyZWN0IiwiaHR0cHM6Ly9leGFtcGxlLmNvbS9zdWNjZXNzIl0sWyJlcSIsIiRzdWNjZXNzX2FjdGlvbl9zdGF0dXMiLCIyMDEiXSxbImVxIiwiJHgtZ29vZy1hbGdvcml0aG0iLCJHT09HNC1SU0EtU0hBMjU2Il0sWyJlcSIsIiR4LWdvb2ctY3JlZGVudGlhbCIsInRlc3RAZXhhbXBsZS5jb20vMjAyMjAxMDEvYXV0by9zdG9yYWdlL2dvb2c0X3JlcXVlc3QiXSxbImVxIiwiJHgtZ29vZy1jdXN0b20tdGltZSIsIjIwMjItMDEtMDFUMDA6MDA6MDBaIl0sWyJlcSIsIiR4LWdvb2ctZGF0ZSIsIjIwMjIwMTAxVDAwMDAwMFoiXSxbImVxIiwiJHgtZ29vZy1tZXRhLXJldmlld2VyIiwiamFuZSJdLFsiZXEiLCIkeC1nb29nLW1ldGEtcHJvamVjdC1tYW5hZ2VyIiwiam9obiJdXSwiZXhwaXJhdGlvbiI6IjIwMjItMDEtMDFUMDA6MDA6MDBaIn0="),
+            ("success_action_redirect", "https://example.com/success"),
+            ("success_action_status", "201"),
+            ("x-goog-algorithm", "GOOG4-RSA-SHA256"),
+            ("x-goog-credential", "test@example.com/20220101/auto/storage/goog4_request"),
+            ("x-goog-custom-time", "2022-01-01T00:00:00Z"),
+            ("x-goog-date", "20220101T000000Z"),
+            ("x-goog-signature", "36eb0969cfaea7680570a47afe46d2f633cc0ee2b3de3f533246fda0167200dba93749efe4be86b6b369f8c9e2d0ca34b1df2ed0883aec2a17a46f500b2217e264a1060979091120385e19fdf28f1cfba05fe436ecea02867fe763faa5ebed3eb7d9e248835635be22899d946eff94070b145e5d57f429bc593375ce1e9e2a129f1d044a71e8694b71a39712d0d7985205dc7426d08be318152149e5dedfcaa3e733b7fb14106cd39d304f39c82e91966ba143ed0101f021e4ae3add0809460dafb66e6cf65faba53848f6418dc04bbcdf5e6a50126a3a23c91cf5c8d263d84d5442f48a7963232ae9bb9e43e7f3421343050c43a78ed228a541d66b5f61eb11"),
+            ("x-goog-meta-reviewer", "jane"),
+            ("x-goog-meta-project-manager", "john")
+          ].into_iter().map(|(n,v)| (n.to_string(), v.to_string())).collect::<Vec<(String, String)>>()
         );
         Ok(())
     }
