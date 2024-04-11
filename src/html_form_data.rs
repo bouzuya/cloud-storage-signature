@@ -39,19 +39,142 @@ enum ErrorKind {
     XGoogMetaNameEmpty,
 }
 
+/// HTML Form Data.
+///
+/// <https://cloud.google.com/storage/docs/xml-api/post-object-forms>
+///
+/// # Example (full)
+///
+/// ```rust
+/// # fn example_for_html_form_data_full() -> anyhow::Result<()> {
+/// #     let service_account_client_email = "test@example.com";
+/// #     let service_account_private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n";
+/// use cloud_storage_signature::HtmlFormData;
+/// use cloud_storage_signature::PolicyDocumentSigningOptions;
+/// let form_data = HtmlFormData::builder()
+///     .acl("public-read")
+///     .bucket("example-bucket")
+///     .cache_control("max-age=3600")
+///     .content_disposition("attachment")
+///     .content_encoding("gzip")
+///     .content_length(1024)
+///     .content_type("application/octet-stream")
+///     .expires("2022-01-04T00:00:00Z")
+///     .key("example-object")
+///     .success_action_redirect("https://example.com/success")
+///     .success_action_status(201)
+///     .x_goog_custom_time("2022-01-03T00:00:00Z")
+///     .x_goog_meta("reviewer", "jane")
+///     .x_goog_meta("project-manager", "john")
+///     .policy_document_signing_options(PolicyDocumentSigningOptions {
+///         accessible_at: None,
+///         expiration: std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60),
+///         region: None,
+///         service_account_client_email: Some(service_account_client_email.to_string()),
+///         service_account_private_key: Some(service_account_private_key.to_string()),
+///         signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+///     })
+///     .build()?;
+/// assert_eq!(
+///   form_data.into_vec().into_iter().map(|(n, _)| n).collect::<Vec<String>>(),
+///   [
+///     "acl",
+///     "bucket",
+///     "Cache-Control",
+///     "Content-Disposition",
+///     "Content-Encoding",
+///     "Content-Length",
+///     "Content-Type",
+///     "Expires",
+///     "key",
+///     "policy",
+///     "success_action_redirect",
+///     "success_action_status",
+///     "x-goog-algorithm",
+///     "x-goog-credential",
+///     "x-goog-custom-time",
+///     "x-goog-date",
+///     "x-goog-signature",
+///     "x-goog-meta-reviewer",
+///     "x-goog-meta-project-manager",
+///   ].into_iter().map(|n| n.to_string()).collect::<Vec<String>>()
+/// );
+/// #     Ok(())
+/// # }
+/// ```
+///
+/// # Example (minimal)
+///
+/// ```rust
+/// # fn example_for_html_form_data_minimal() -> Result<(), cloud_storage_signature::html_form_data::Error>
+/// # {
+/// use cloud_storage_signature::HtmlFormData;
+/// assert_eq!(
+///     HtmlFormData::builder()
+///         .key("object_name1")
+///         .build()?
+///         .into_vec(),
+///     vec![("key".to_string(), "object_name1".to_string())]
+/// );
+/// #     Ok(())
+/// # }
+/// ```
+///
+/// # Example (policy document minimal)
+///
+/// ```rust
+/// # fn example_for_html_form_data_with_policy_document() -> anyhow::Result<()> {
+/// #     let service_account_client_email = "test@example.com";
+/// #     let service_account_private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n";
+/// use cloud_storage_signature::HtmlFormData;
+/// use cloud_storage_signature::PolicyDocumentSigningOptions;
+/// let form_data = HtmlFormData::builder()
+///     .bucket("example-bucket")
+///     .key("example-object")
+///     .policy_document_signing_options(PolicyDocumentSigningOptions {
+///         accessible_at: None,
+///         expiration: std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60),
+///         region: None,
+///         service_account_client_email: Some(service_account_client_email.to_string()),
+///         service_account_private_key: Some(service_account_private_key.to_string()),
+///         signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+///     })
+///     .build()?;
+/// assert_eq!(
+///   form_data.into_vec().into_iter().map(|(n, _)| n).collect::<Vec<String>>(),
+///   [
+///     "bucket",
+///     "key",
+///     "policy",
+///     "x-goog-algorithm",
+///     "x-goog-credential",
+///     "x-goog-date",
+///     "x-goog-signature",
+///   ].into_iter().map(|n| n.to_string()).collect::<Vec<String>>()
+/// );
+/// #     Ok(())
+/// # }
+/// ```
 #[derive(Clone, Debug)]
 pub struct HtmlFormData(Vec<(String, String)>);
 
 impl HtmlFormData {
+    /// Returns a new `HtmlFormDataBuilder`.
     pub fn builder() -> HtmlFormDataBuilder {
         HtmlFormDataBuilder::default()
     }
 
+    /// Converts `self` into a `Vec<(String, String)>`.
+    /// The first element of each tuple is the field name, and the second
+    /// element is the field value.
     pub fn into_vec(self) -> Vec<(String, String)> {
         self.0
     }
 }
 
+/// Policy Document Signing Options.
+///
+/// See [`HtmlFormData`] examples.
 pub struct PolicyDocumentSigningOptions {
     pub accessible_at: Option<SystemTime>,
     pub expiration: SystemTime,
@@ -61,6 +184,9 @@ pub struct PolicyDocumentSigningOptions {
     pub signing_algorithm: String,
 }
 
+/// HTML Form Data Builder.
+///
+/// See [`HtmlFormData`] examples.
 #[derive(Default)]
 pub struct HtmlFormDataBuilder {
     acl: Option<String>,

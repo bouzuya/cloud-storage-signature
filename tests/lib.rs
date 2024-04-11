@@ -1,5 +1,19 @@
 use std::time::{Duration, SystemTime};
 
+#[test]
+fn test_readme_html_form_data_example() -> Result<(), cloud_storage_signature::html_form_data::Error>
+{
+    use cloud_storage_signature::HtmlFormData;
+    assert_eq!(
+        HtmlFormData::builder()
+            .key("object_name1")
+            .build()?
+            .into_vec(),
+        vec![("key".to_string(), "object_name1".to_string())]
+    );
+    Ok(())
+}
+
 #[ignore]
 #[tokio::test]
 async fn test_build_html_form_data() -> anyhow::Result<()> {
