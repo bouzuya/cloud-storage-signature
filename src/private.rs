@@ -1,4 +1,5 @@
 pub mod active_datetime;
+pub mod bound_token;
 pub mod canonical_request;
 pub mod credential_scope;
 pub mod date;
@@ -14,6 +15,7 @@ pub mod string_to_sign;
 pub mod utils;
 
 pub(crate) use self::active_datetime::ActiveDatetime;
+pub(crate) use self::bound_token::BoundToken;
 pub(crate) use self::canonical_request::{canonical_query_string, CanonicalRequest};
 pub(crate) use self::credential_scope::CredentialScope;
 pub(crate) use self::date::Date;
