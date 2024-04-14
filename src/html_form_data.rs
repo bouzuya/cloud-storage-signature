@@ -17,7 +17,7 @@ pub(crate) enum ErrorKind {
     #[error("accessible_at out of range")]
     AccessibleAtOutOfRange,
     #[error("bound token authorizer: {0}")]
-    BoundTokenAuthorizer(#[source] crate::signing_key::Error),
+    BoundTokenAuthorizer(#[source] crate::private::signing_key_inner::Error),
     #[error("bucket not found")]
     BucketNotFound,
     #[error("expiration before accessible_at")]
@@ -29,7 +29,7 @@ pub(crate) enum ErrorKind {
     #[error("policy document serialization")]
     PolicyDocumentSerialization,
     #[error(transparent)]
-    Signing(crate::signing_key::Error),
+    Signing(crate::private::signing_key_inner::Error),
     #[error("x-goog-algorithm not supported")]
     XGoogAlgorithmNotSupported,
     #[error("x-goog-credential invalid")]
@@ -417,7 +417,7 @@ impl HtmlFormDataBuilder {
                 let region = region.as_deref().unwrap_or("auto");
                 let bucket = self.bucket.as_deref().ok_or(ErrorKind::BucketNotFound)?;
                 let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
-                let x_goog_algorithm = signing_key.x_goog_algorithm();
+                let x_goog_algorithm = signing_key.0.x_goog_algorithm();
                 // TODO: x_goog_algorithm "GOOG4-HMAC-SHA256" is not supported yet
                 if x_goog_algorithm != SigningAlgorithm::Goog4RsaSha256 {
                     // TODO: return an error if hmac and use_sign_blob
@@ -425,6 +425,7 @@ impl HtmlFormDataBuilder {
                 }
 
                 let service_account_client_email = signing_key
+                    .0
                     .authorizer()
                     .await
                     .map_err(ErrorKind::BoundTokenAuthorizer)?;
@@ -559,6 +560,7 @@ impl HtmlFormDataBuilder {
                 );
                 let message = encoded_policy.as_str();
                 let message_digest = signing_key
+                    .0
                     .sign(*use_sign_blob, message.as_bytes())
                     .await
                     .map_err(ErrorKind::Signing)?;

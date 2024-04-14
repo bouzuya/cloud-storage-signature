@@ -11,6 +11,7 @@ pub mod request_type;
 pub mod service;
 pub mod signed_url;
 pub mod signing_algorithm;
+pub mod signing_key_inner;
 pub mod string_to_sign;
 pub mod utils;
 
@@ -26,4 +27,5 @@ pub(crate) use self::request_type::RequestType;
 pub(crate) use self::service::Service;
 pub(crate) use self::signed_url::{hex_encode, SignedUrl};
 pub(crate) use self::signing_algorithm::SigningAlgorithm;
+pub(crate) use self::signing_key_inner::SigningKeyInner;
 pub(crate) use self::string_to_sign::StringToSign;

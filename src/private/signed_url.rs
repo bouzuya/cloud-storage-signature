@@ -16,7 +16,7 @@ pub(crate) enum Error {
     #[error("host header not found")]
     HostHeaderNotFound,
     #[error("signing error: {0}")]
-    Signing(crate::signing_key::Error),
+    Signing(crate::private::signing_key_inner::Error),
 }
 
 pub struct SignedUrl(String);
@@ -31,8 +31,8 @@ impl SignedUrl {
         use_sign_blob: bool,
     ) -> Result<Self, Error> {
         let service_account_client_email =
-            signing_key.authorizer().await.map_err(Error::Signing)?;
-        let x_goog_algorithm = signing_key.x_goog_algorithm();
+            signing_key.0.authorizer().await.map_err(Error::Signing)?;
+        let x_goog_algorithm = signing_key.0.x_goog_algorithm();
         add_signed_url_required_query_string_parameters(
             &mut request,
             service_account_client_email.as_str(),
@@ -51,6 +51,7 @@ impl SignedUrl {
 
         let message = string_to_sign.to_string();
         let message_digest = signing_key
+            .0
             .sign(use_sign_blob, message.as_bytes())
             .await
             .map_err(Error::Signing)?;
