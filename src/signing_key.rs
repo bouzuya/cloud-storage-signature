@@ -3,14 +3,12 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::html_form_data::Error;
-
 #[derive(Clone)]
 pub struct SigningKey(KeyInner);
 
 impl SigningKey {
     pub fn bound_token() -> Self {
-        Self(KeyInner::BoundToken(BoundedToken::new()))
+        Self(KeyInner::BoundToken(BoundToken::new()))
     }
 
     pub fn hmac(access_id: String, secret: String) -> Self {
@@ -26,7 +24,13 @@ impl SigningKey {
 
     pub(crate) async fn authorizer(&self) -> Result<String, crate::html_form_data::Error> {
         Ok(match &self.0 {
-            KeyInner::BoundToken(bounded_token) => bounded_token.get_email_and_token().await?.0,
+            KeyInner::BoundToken(bound_token) => {
+                bound_token
+                    .get_email_and_token()
+                    .await
+                    .map_err(crate::html_form_data::ErrorKind::BoundTokenAuthorizer)?
+                    .0
+            }
             KeyInner::Hmac { access_id, .. } => access_id.to_string(),
             KeyInner::ServiceAccount { client_email, .. } => client_email.to_string(),
         })
@@ -38,9 +42,12 @@ impl SigningKey {
         message: &[u8],
     ) -> Result<Vec<u8>, crate::html_form_data::Error> {
         match &self.0 {
-            KeyInner::BoundToken(bounded_token) => {
+            KeyInner::BoundToken(bound_token) => {
                 if use_sign_blob {
-                    Ok(bounded_token.sign(message).await?)
+                    Ok(bound_token
+                        .sign(message)
+                        .await
+                        .map_err(crate::html_form_data::ErrorKind::BoundTokenSign)?)
                 } else {
                     todo!()
                 }
@@ -76,7 +83,7 @@ impl SigningKey {
 
 #[derive(Clone)]
 enum KeyInner {
-    BoundToken(BoundedToken),
+    BoundToken(BoundToken),
     Hmac {
         access_id: String,
         // TODO: unused
@@ -96,13 +103,57 @@ struct AccessToken {
     token_type: String,
 }
 
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum BoundTokenError {
+    #[error("bound token / email request / build error: {0}")]
+    EmailRequestBuild(#[source] reqwest::Error),
+    #[error("bound token / email request / execute error: {0}")]
+    EmailRequestExecute(#[source] reqwest::Error),
+    #[error("bound token / email request / error response error: {0}")]
+    EmailRequestErrorResponse(#[source] reqwest::Error),
+    #[error("bound token / email request / status error: {0} {1}")]
+    EmailRequestStatus(u16, String),
+    #[error("bound token / email request / success response error: {0}")]
+    EmailRequestSuccessResponse(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / build error: {0}")]
+    SignBlobRequestBuild(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / serialize error: {0}")]
+    SignBlobRequestSerialize(#[source] serde_json::Error),
+    #[error("bound token / signBlob request / execute error: {0}")]
+    SignBlobRequestExecute(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / error response error: {0}")]
+    SignBlobRequestErrorResponse(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / status error: {0} {1}")]
+    SignBlobRequestStatus(u16, String),
+    #[error("bound token / signBlob request / success response error: {0}")]
+    SignBlobRequestSuccessResponse(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / success response deserialize error: {0}")]
+    SignBlobRequestSuccessResponseDeserialize(#[source] serde_json::Error),
+    #[error("bound token / signBlob request / success response base64 decode error: {0}")]
+    SignBlobRequestSuccessResponseBase64Decode(#[source] base64::DecodeError),
+    #[error("bound token / token request / build error: {0}")]
+    TokenRequestBuild(#[source] reqwest::Error),
+    #[error("bound token / token request / execute error: {0}")]
+    TokenRequestExecute(#[source] reqwest::Error),
+    #[error("bound token / token request / error response error: {0}")]
+    TokenRequestErrorResponse(#[source] reqwest::Error),
+    #[error("bound token / token request / invalid token_type error: {0}")]
+    TokenRequestInvalidTokenType(String),
+    #[error("bound token / token request / status error: {0} {1}")]
+    TokenRequestStatus(u16, String),
+    #[error("bound token / token request / success response error: {0}")]
+    TokenRequestSuccessResponse(#[source] reqwest::Error),
+    #[error("bound token / token request / success response deserialize error: {0}")]
+    TokenRequestSuccessResponseDeserialize(#[source] serde_json::Error),
+}
+
 #[derive(Clone)]
-pub struct BoundedToken {
+pub(crate) struct BoundToken {
     cache: Arc<tokio::sync::Mutex<Option<(String, String, SystemTime)>>>,
     client: reqwest::Client,
 }
 
-impl BoundedToken {
+impl BoundToken {
     pub fn new() -> Self {
         Self {
             cache: Arc::new(tokio::sync::Mutex::new(None)),
@@ -110,7 +161,7 @@ impl BoundedToken {
         }
     }
 
-    async fn get_email_and_token(&self) -> Result<(String, String), Error> {
+    async fn get_email_and_token(&self) -> Result<(String, String), BoundTokenError> {
         let mut cache = self.cache.lock().await;
         Ok(match cache.clone() {
             Some((email, access_token, expires))
@@ -125,7 +176,6 @@ impl BoundedToken {
                 (email, access_token)
             }
             Some(_) | None => {
-                // FIXME: handle error
                 // email
                 // <https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys>
                 let url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email";
@@ -134,16 +184,27 @@ impl BoundedToken {
                     .request(reqwest::Method::GET, url)
                     .header("Metadata-Flavor", "Google")
                     .build()
-                    .unwrap();
-                let response = self.client.execute(request).await.unwrap();
-                println!("status: {:?}", response.status());
-                if !response.status().is_success() {
-                    let response_body = response.text().await.unwrap();
-                    println!("response_body: {:?}", response_body);
-                    todo!()
+                    .map_err(BoundTokenError::EmailRequestBuild)?;
+                let response = self
+                    .client
+                    .execute(request)
+                    .await
+                    .map_err(BoundTokenError::EmailRequestExecute)?;
+                let status = response.status();
+                if !status.is_success() {
+                    let response_body = response
+                        .text()
+                        .await
+                        .map_err(BoundTokenError::EmailRequestErrorResponse)?;
+                    return Err(BoundTokenError::EmailRequestStatus(
+                        status.as_u16(),
+                        response_body,
+                    ));
                 }
-                let response_body = response.text().await.unwrap();
-                println!("response_body: {:?}", response_body);
+                let response_body = response
+                    .text()
+                    .await
+                    .map_err(BoundTokenError::EmailRequestSuccessResponse)?;
                 let email = response_body;
 
                 // token
@@ -154,19 +215,34 @@ impl BoundedToken {
                     .request(reqwest::Method::GET, url)
                     .header("Metadata-Flavor", "Google")
                     .build()
-                    .unwrap();
-                let response = self.client.execute(request).await.unwrap();
-                println!("status: {:?}", response.status());
-                if !response.status().is_success() {
-                    let response_body = response.text().await.unwrap();
-                    println!("response_body: {:?}", response_body);
-                    todo!()
+                    .map_err(BoundTokenError::TokenRequestBuild)?;
+                let response = self
+                    .client
+                    .execute(request)
+                    .await
+                    .map_err(BoundTokenError::TokenRequestExecute)?;
+                let status = response.status();
+                if !status.is_success() {
+                    let response_body = response
+                        .text()
+                        .await
+                        .map_err(BoundTokenError::TokenRequestErrorResponse)?;
+                    return Err(BoundTokenError::TokenRequestStatus(
+                        status.as_u16(),
+                        response_body,
+                    ));
                 }
-                let response_body = response.text().await.unwrap();
-                println!("response_body: {:?}", response_body);
-
-                let access_token = serde_json::from_str::<'_, AccessToken>(&response_body).unwrap();
-
+                let response_body = response
+                    .text()
+                    .await
+                    .map_err(BoundTokenError::TokenRequestSuccessResponse)?;
+                let access_token = serde_json::from_str::<'_, AccessToken>(&response_body)
+                    .map_err(BoundTokenError::TokenRequestSuccessResponseDeserialize)?;
+                if access_token.token_type != "Bearer" {
+                    return Err(BoundTokenError::TokenRequestInvalidTokenType(
+                        access_token.token_type,
+                    ));
+                }
                 let expires = SystemTime::now() + Duration::from_secs(access_token.expires_in);
                 *cache = Some((email.clone(), access_token.access_token.clone(), expires));
                 (email, access_token.access_token)
@@ -174,7 +250,7 @@ impl BoundedToken {
         })
     }
 
-    async fn sign(&self, message: &[u8]) -> Result<Vec<u8>, Error> {
+    async fn sign(&self, message: &[u8]) -> Result<Vec<u8>, BoundTokenError> {
         let (email, token) = self.get_email_and_token().await?;
 
         // <https://cloud.google.com/iam/docs/reference/credentials/rest/v1/projects.serviceAccounts/signBlob>
@@ -187,6 +263,7 @@ impl BoundedToken {
         #[derive(Debug, serde::Deserialize)]
         #[serde(rename_all = "camelCase")]
         struct SignBlobResponseBody {
+            #[allow(unused)]
             key_id: String,
             signed_blob: String,
         }
@@ -207,29 +284,38 @@ impl BoundedToken {
                         message,
                     ),
                 })
-                .unwrap(),
+                .map_err(BoundTokenError::SignBlobRequestSerialize)?,
             )
             .build()
-            .unwrap();
-        let response = self.client.execute(request).await.unwrap();
-        println!("status: {:?}", response.status());
-        if !response.status().is_success() {
-            let response_body = response.text().await.unwrap();
-            println!("response_body: {:?}", response_body);
-            todo!()
+            .map_err(BoundTokenError::SignBlobRequestBuild)?;
+        let response = self
+            .client
+            .execute(request)
+            .await
+            .map_err(BoundTokenError::SignBlobRequestExecute)?;
+        let status = response.status();
+        if !status.is_success() {
+            let response_body = response
+                .text()
+                .await
+                .map_err(BoundTokenError::SignBlobRequestErrorResponse)?;
+            return Err(BoundTokenError::SignBlobRequestStatus(
+                status.as_u16(),
+                response_body,
+            ));
         }
-        let response_body = response.text().await.unwrap();
-        println!("response_body: {:?}", response_body);
-
-        let response_body =
-            serde_json::from_str::<'_, SignBlobResponseBody>(&response_body).unwrap();
-        println!("response_body: {:?}", response_body);
+        let response_body = response
+            .text()
+            .await
+            .map_err(BoundTokenError::SignBlobRequestSuccessResponse)?;
+        let response_body = serde_json::from_str::<'_, SignBlobResponseBody>(&response_body)
+            .map_err(BoundTokenError::SignBlobRequestSuccessResponseDeserialize)?;
 
         let signature = base64::Engine::decode(
             &base64::engine::general_purpose::STANDARD,
             response_body.signed_blob,
         )
-        .unwrap();
+        .map_err(BoundTokenError::SignBlobRequestSuccessResponseBase64Decode)?;
 
         Ok(signature)
     }
@@ -242,6 +328,6 @@ mod tests {
     #[test]
     fn test() {
         fn assert_impls<T: Clone + Send + Sync>() {}
-        assert_impls::<BoundedToken>();
+        assert_impls::<BoundToken>();
     }
 }

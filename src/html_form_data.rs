@@ -16,6 +16,10 @@ pub struct Error(#[from] ErrorKind);
 pub(crate) enum ErrorKind {
     #[error("accessible_at out of range")]
     AccessibleAtOutOfRange,
+    #[error("bound token authorizer: {0}")]
+    BoundTokenAuthorizer(#[source] crate::signing_key::BoundTokenError),
+    #[error("bound token sign: {0}")]
+    BoundTokenSign(#[source] crate::signing_key::BoundTokenError),
     #[error("bucket not found")]
     BucketNotFound,
     #[error("expiration before accessible_at")]
