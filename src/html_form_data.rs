@@ -17,7 +17,7 @@ pub(crate) enum ErrorKind {
     #[error("accessible_at out of range")]
     AccessibleAtOutOfRange,
     #[error("bound token authorizer: {0}")]
-    BoundTokenAuthorizer(#[source] crate::signing_key::BoundTokenError),
+    BoundTokenAuthorizer(#[source] crate::signing_key::Error),
     #[error("bucket not found")]
     BucketNotFound,
     #[error("expiration before accessible_at")]
@@ -424,7 +424,10 @@ impl HtmlFormDataBuilder {
                     return Err(Error::from(ErrorKind::XGoogAlgorithmNotSupported));
                 }
 
-                let service_account_client_email = signing_key.authorizer().await?;
+                let service_account_client_email = signing_key
+                    .authorizer()
+                    .await
+                    .map_err(ErrorKind::BoundTokenAuthorizer)?;
 
                 let credential_scope = CredentialScope::new(
                     Date::from_unix_timestamp_obj(accessible_at),

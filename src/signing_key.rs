@@ -6,11 +6,9 @@ use std::{
 use crate::private::SigningAlgorithm;
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
+    #[error("bound token authorizer error: {0}")]
+    BoundTokenAuthorizer(#[source] BoundTokenError),
     #[error("bound token signing error: {0}")]
     BoundTokenSigning(#[source] BoundTokenError),
     #[error("service account private key pem parsing error: {0}")]
@@ -40,13 +38,13 @@ impl SigningKey {
         })
     }
 
-    pub(crate) async fn authorizer(&self) -> Result<String, crate::html_form_data::Error> {
+    pub(crate) async fn authorizer(&self) -> Result<String, Error> {
         Ok(match &self.0 {
             KeyInner::BoundToken(bound_token) => {
                 bound_token
                     .get_email_and_token()
                     .await
-                    .map_err(crate::html_form_data::ErrorKind::BoundTokenAuthorizer)?
+                    .map_err(Error::BoundTokenAuthorizer)?
                     .0
             }
             KeyInner::Hmac { access_id, .. } => access_id.to_string(),
@@ -61,7 +59,7 @@ impl SigningKey {
                     Ok(bound_token
                         .sign(message)
                         .await
-                        .map_err(ErrorKind::BoundTokenSigning)?)
+                        .map_err(Error::BoundTokenSigning)?)
                 } else {
                     todo!()
                 }
@@ -72,10 +70,10 @@ impl SigningKey {
                     todo!()
                 } else {
                     let pkcs8 = pem::parse(private_key.as_bytes())
-                        .map_err(ErrorKind::ServiceAccountPrivateKeyPemParsing)?;
+                        .map_err(Error::ServiceAccountPrivateKeyPemParsing)?;
                     let signing_key = pkcs8.contents();
                     let key_pair = ring::signature::RsaKeyPair::from_pkcs8(signing_key)
-                        .map_err(ErrorKind::ServiceAccountPrivateKeyPkcs8Parsing)?;
+                        .map_err(Error::ServiceAccountPrivateKeyPkcs8Parsing)?;
                     let mut signature = vec![0; key_pair.public().modulus_len()];
                     key_pair
                         .sign(
@@ -84,7 +82,7 @@ impl SigningKey {
                             message,
                             &mut signature,
                         )
-                        .map_err(ErrorKind::ServiceAccountSigning)?;
+                        .map_err(Error::ServiceAccountSigning)?;
                     Ok(signature)
                 }
             }

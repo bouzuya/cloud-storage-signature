@@ -19,10 +19,8 @@ enum ErrorKind {
     CanonicalRequest(crate::private::canonical_request::Error),
     #[error("host header not found")]
     HostHeaderNotFound,
-    #[error("pem key rejected: {0}")]
-    KeyRejected(ring::error::KeyRejected),
-    #[error("sign: {0}")]
-    Sign(ring::error::Unspecified),
+    #[error("signing error: {0}")]
+    Signing(crate::signing_key::Error),
 }
 
 pub struct SignedUrl(String);
@@ -36,8 +34,8 @@ impl SignedUrl {
         signing_key: SigningKey,
         use_sign_blob: bool,
     ) -> Result<Self, Error> {
-        // FIXME: handle error
-        let service_account_client_email = signing_key.authorizer().await.unwrap();
+        let service_account_client_email =
+            signing_key.authorizer().await.map_err(ErrorKind::Signing)?;
         let x_goog_algorithm = signing_key.x_goog_algorithm();
         add_signed_url_required_query_string_parameters(
             &mut request,
@@ -55,12 +53,11 @@ impl SignedUrl {
             CanonicalRequest::new(&request).map_err(ErrorKind::CanonicalRequest)?,
         );
 
-        // FIXME: handle error
         let message = string_to_sign.to_string();
         let message_digest = signing_key
             .sign(use_sign_blob, message.as_bytes())
             .await
-            .unwrap();
+            .map_err(ErrorKind::Signing)?;
         let request_signature = hex_encode(&message_digest);
 
         let hostname = "https://storage.googleapis.com";
