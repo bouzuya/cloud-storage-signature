@@ -9,7 +9,10 @@ This crate is in ALPHA. Do not use in production.
 
 ## TODOs
 
-- Add HMAC authentication
+- Support not signBlob with BoundedToken
+- Support signBlob with ServiceAccount
+- Support HMAC key
+- Improve error handling
 - Add doc comments
 - Refactor
   - Remove http crate from dependencies
