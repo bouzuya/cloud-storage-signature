@@ -6,12 +6,6 @@ pub struct Error;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Location(String);
 
-impl Location {
-    pub fn as_str(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
 impl std::convert::TryFrom<&str> for Location {
     type Error = Error;
 
