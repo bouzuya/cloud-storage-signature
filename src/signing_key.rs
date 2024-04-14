@@ -5,6 +5,22 @@ use std::{
 
 use crate::private::SigningAlgorithm;
 
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct Error(#[from] ErrorKind);
+
+#[derive(Debug, thiserror::Error)]
+enum ErrorKind {
+    #[error("bound token signing error: {0}")]
+    BoundTokenSigning(#[source] BoundTokenError),
+    #[error("service account private key pem parsing error: {0}")]
+    ServiceAccountPrivateKeyPemParsing(#[source] pem::PemError),
+    #[error("service account private key pkcs8 parsing error: {0}")]
+    ServiceAccountPrivateKeyPkcs8Parsing(ring::error::KeyRejected),
+    #[error("service account signing error: {0}")]
+    ServiceAccountSigning(ring::error::Unspecified),
+}
+
 #[derive(Clone)]
 pub struct SigningKey(KeyInner);
 
@@ -38,18 +54,14 @@ impl SigningKey {
         })
     }
 
-    pub(crate) async fn sign(
-        &self,
-        use_sign_blob: bool,
-        message: &[u8],
-    ) -> Result<Vec<u8>, crate::html_form_data::Error> {
+    pub(crate) async fn sign(&self, use_sign_blob: bool, message: &[u8]) -> Result<Vec<u8>, Error> {
         match &self.0 {
             KeyInner::BoundToken(bound_token) => {
                 if use_sign_blob {
                     Ok(bound_token
                         .sign(message)
                         .await
-                        .map_err(crate::html_form_data::ErrorKind::BoundTokenSign)?)
+                        .map_err(ErrorKind::BoundTokenSigning)?)
                 } else {
                     todo!()
                 }
@@ -59,17 +71,21 @@ impl SigningKey {
                 if use_sign_blob {
                     todo!()
                 } else {
-                    let pkcs8 = pem::parse(private_key.as_bytes()).map_err(|_| {
-                        crate::html_form_data::ErrorKind::ServiceAccountPrivateKeyParsing
-                    })?;
+                    let pkcs8 = pem::parse(private_key.as_bytes())
+                        .map_err(ErrorKind::ServiceAccountPrivateKeyPemParsing)?;
                     let signing_key = pkcs8.contents();
-                    let message_digest = crate::private::sign(
-                        crate::private::SigningAlgorithm::Goog4RsaSha256,
-                        signing_key,
-                        message,
-                    )
-                    .map_err(crate::html_form_data::ErrorKind::Sign)?;
-                    Ok(message_digest)
+                    let key_pair = ring::signature::RsaKeyPair::from_pkcs8(signing_key)
+                        .map_err(ErrorKind::ServiceAccountPrivateKeyPkcs8Parsing)?;
+                    let mut signature = vec![0; key_pair.public().modulus_len()];
+                    key_pair
+                        .sign(
+                            &ring::signature::RSA_PKCS1_SHA256,
+                            &ring::rand::SystemRandom::new(),
+                            message,
+                            &mut signature,
+                        )
+                        .map_err(ErrorKind::ServiceAccountSigning)?;
+                    Ok(signature)
                 }
             }
         }

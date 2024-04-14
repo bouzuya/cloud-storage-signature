@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, vec};
+use std::collections::BTreeSet;
 
 use crate::SigningKey;
 
@@ -38,7 +38,7 @@ impl SignedUrl {
     ) -> Result<Self, Error> {
         // FIXME: handle error
         let service_account_client_email = signing_key.authorizer().await.unwrap();
-        let x_goog_algorithm = SigningAlgorithm::Goog4RsaSha256;
+        let x_goog_algorithm = signing_key.x_goog_algorithm();
         add_signed_url_required_query_string_parameters(
             &mut request,
             service_account_client_email.as_str(),
@@ -130,30 +130,6 @@ pub(crate) fn hex_encode(message_digest: &[u8]) -> String {
         let _ = write!(s, "{:02x}", b);
         s
     })
-}
-
-pub(crate) fn sign(
-    algorithm: SigningAlgorithm,
-    key: &[u8],
-    message: &[u8],
-) -> Result<Vec<u8>, Error> {
-    match algorithm {
-        SigningAlgorithm::Goog4RsaSha256 => {
-            let key_pair =
-                ring::signature::RsaKeyPair::from_pkcs8(key).map_err(ErrorKind::KeyRejected)?;
-            let mut signature = vec![0; key_pair.public().modulus_len()];
-            key_pair
-                .sign(
-                    &ring::signature::RSA_PKCS1_SHA256,
-                    &ring::rand::SystemRandom::new(),
-                    message,
-                    &mut signature,
-                )
-                .map_err(ErrorKind::Sign)?;
-            Ok(signature)
-        }
-        _ => unimplemented!(),
-    }
 }
 
 #[cfg(test)]

@@ -22,6 +22,6 @@ pub(crate) use self::http_verb::HttpVerb;
 pub(crate) use self::location::Location;
 pub(crate) use self::request_type::RequestType;
 pub(crate) use self::service::Service;
-pub(crate) use self::signed_url::{hex_encode, sign, SignedUrl};
+pub(crate) use self::signed_url::{hex_encode, SignedUrl};
 pub(crate) use self::signing_algorithm::SigningAlgorithm;
 pub(crate) use self::string_to_sign::StringToSign;

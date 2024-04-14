@@ -18,8 +18,6 @@ pub(crate) enum ErrorKind {
     AccessibleAtOutOfRange,
     #[error("bound token authorizer: {0}")]
     BoundTokenAuthorizer(#[source] crate::signing_key::BoundTokenError),
-    #[error("bound token sign: {0}")]
-    BoundTokenSign(#[source] crate::signing_key::BoundTokenError),
     #[error("bucket not found")]
     BucketNotFound,
     #[error("expiration before accessible_at")]
@@ -30,10 +28,8 @@ pub(crate) enum ErrorKind {
     KeyNotFound,
     #[error("policy document serialization")]
     PolicyDocumentSerialization,
-    #[error("service account private key parsing")]
-    ServiceAccountPrivateKeyParsing,
     #[error(transparent)]
-    Sign(crate::private::signed_url::Error),
+    Signing(crate::signing_key::Error),
     #[error("x-goog-algorithm not supported")]
     XGoogAlgorithmNotSupported,
     #[error("x-goog-credential invalid")]
@@ -559,7 +555,10 @@ impl HtmlFormDataBuilder {
                     policy.as_bytes(),
                 );
                 let message = encoded_policy.as_str();
-                let message_digest = signing_key.sign(*use_sign_blob, message.as_bytes()).await?;
+                let message_digest = signing_key
+                    .sign(*use_sign_blob, message.as_bytes())
+                    .await
+                    .map_err(ErrorKind::Signing)?;
                 let x_goog_signature = hex_encode(&message_digest);
                 Ok((
                     Some(encoded_policy),
