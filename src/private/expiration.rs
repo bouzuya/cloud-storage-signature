@@ -1,15 +1,11 @@
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error("out of range (0..=604800) : {0}")]
     OutOfRange(i64),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct Expiration(i64);
+pub(crate) struct Expiration(i64);
 
 impl std::convert::TryFrom<i64> for Expiration {
     type Error = Error;
@@ -18,7 +14,7 @@ impl std::convert::TryFrom<i64> for Expiration {
         if (0..=604_800).contains(&value) {
             Ok(Self(value))
         } else {
-            Err(Error::from(ErrorKind::OutOfRange(value)))
+            Err(Error::OutOfRange(value))
         }
     }
 }

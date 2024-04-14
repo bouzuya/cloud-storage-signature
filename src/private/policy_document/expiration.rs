@@ -3,11 +3,7 @@ use std::str::FromStr;
 use crate::private::utils::UnixTimestamp;
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     // TODO:
     #[error("invalid format or out of range")]
     InvalidFormatOrOutOfRange(#[from] crate::private::utils::unix_timestamp::Error),
@@ -16,7 +12,7 @@ enum ErrorKind {
 // <del>YYYYMMDD'T'HHMMSS'Z'</del>
 // The document is wrong. The document says it is in the format of YYYYMMDD'T'HHMMSS'Z', but it is actually in RFC3339 format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Expiration(UnixTimestamp);
+pub(crate) struct Expiration(UnixTimestamp);
 
 impl Expiration {
     pub(crate) fn from_unix_timestamp_obj(unix_timestamp: UnixTimestamp) -> Self {
@@ -34,7 +30,7 @@ impl std::str::FromStr for Expiration {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let unix_timestamp = UnixTimestamp::from_rfc3339(s).map_err(ErrorKind::from)?;
+        let unix_timestamp = UnixTimestamp::from_rfc3339(s).map_err(Error::from)?;
         Ok(Expiration(unix_timestamp))
     }
 }

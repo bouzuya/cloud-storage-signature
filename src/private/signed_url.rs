@@ -10,11 +10,7 @@ use super::StringToSign;
 use super::{canonical_query_string, CanonicalRequest};
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error(transparent)]
     CanonicalRequest(crate::private::canonical_request::Error),
     #[error("host header not found")]
@@ -35,7 +31,7 @@ impl SignedUrl {
         use_sign_blob: bool,
     ) -> Result<Self, Error> {
         let service_account_client_email =
-            signing_key.authorizer().await.map_err(ErrorKind::Signing)?;
+            signing_key.authorizer().await.map_err(Error::Signing)?;
         let x_goog_algorithm = signing_key.x_goog_algorithm();
         add_signed_url_required_query_string_parameters(
             &mut request,
@@ -50,14 +46,14 @@ impl SignedUrl {
             x_goog_algorithm,
             active_datetime,
             credential_scope,
-            CanonicalRequest::new(&request).map_err(ErrorKind::CanonicalRequest)?,
+            CanonicalRequest::new(&request).map_err(Error::CanonicalRequest)?,
         );
 
         let message = string_to_sign.to_string();
         let message_digest = signing_key
             .sign(use_sign_blob, message.as_bytes())
             .await
-            .map_err(ErrorKind::Signing)?;
+            .map_err(Error::Signing)?;
         let request_signature = hex_encode(&message_digest);
 
         let hostname = "https://storage.googleapis.com";
@@ -88,9 +84,9 @@ fn add_signed_url_required_query_string_parameters(
     x_goog_date: ActiveDatetime,
     credential_scope: &CredentialScope,
     expiration: Expiration,
-) -> Result<(), ErrorKind> {
+) -> Result<(), Error> {
     if !request.headers().contains_key(http::header::HOST) {
-        return Err(ErrorKind::HostHeaderNotFound);
+        return Err(Error::HostHeaderNotFound);
     }
     let authorizer = service_account_client_email;
     let mut url1 = url::Url::parse(request.uri().to_string().as_str()).expect("uri to be valid");

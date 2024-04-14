@@ -1,17 +1,13 @@
 use crate::private::utils::UnixTimestamp;
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error("invalid format : {0}")]
     InvalidFormat(String),
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Date(u32);
+pub(crate) struct Date(u32);
 
 impl Date {
     pub(crate) fn from_unix_timestamp_obj(unix_timestamp: UnixTimestamp) -> Self {
@@ -24,22 +20,22 @@ impl std::convert::TryFrom<&str> for Date {
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.len() != 8 {
-            return Err(ErrorKind::InvalidFormat(value.to_string()))?;
+            return Err(Error::InvalidFormat(value.to_string()))?;
         }
         let yyyymmdd = value
             .parse::<u32>()
-            .map_err(|_| ErrorKind::InvalidFormat(value.to_string()))?;
+            .map_err(|_| Error::InvalidFormat(value.to_string()))?;
         let yyyy = yyyymmdd / 10000;
         if !(0..=9999).contains(&yyyy) {
-            return Err(ErrorKind::InvalidFormat(value.to_string()))?;
+            return Err(Error::InvalidFormat(value.to_string()))?;
         }
         let mm = (yyyymmdd % 10000) / 100;
         if !(1..=12).contains(&mm) {
-            return Err(ErrorKind::InvalidFormat(value.to_string()))?;
+            return Err(Error::InvalidFormat(value.to_string()))?;
         }
         let dd = yyyymmdd % 100;
         if !(1..=31).contains(&dd) {
-            return Err(ErrorKind::InvalidFormat(value.to_string()))?;
+            return Err(Error::InvalidFormat(value.to_string()))?;
         }
         // FIXME: validate date
         Ok(Self(yyyy * 10000 + mm * 100 + dd))

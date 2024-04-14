@@ -3,11 +3,7 @@
 use crate::private::{Date, Location, RequestType, Service};
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error("SERVICE '{0}' and REQUEST_TYPE '{1}' is an invalid combination")]
     InvalidCombinationOfServiceAndRequestType(Service, RequestType),
 }
@@ -30,8 +26,9 @@ impl CredentialScope {
         match (service, request_type) {
             (Service::Storage, RequestType::Aws4Request)
             | (Service::S3, RequestType::Goog4Request) => {
-                return Err(Error::from(
-                    ErrorKind::InvalidCombinationOfServiceAndRequestType(service, request_type),
+                return Err(Error::InvalidCombinationOfServiceAndRequestType(
+                    service,
+                    request_type,
                 ));
             }
             (Service::Storage, RequestType::Goog4Request)

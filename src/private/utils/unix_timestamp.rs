@@ -1,11 +1,7 @@
 use std::time::SystemTime;
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub(crate) struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error("invalid iso8601 format: {0}")]
     InvalidIso8601Format(String),
     #[error("invalid rfc3339 format: {0}")]
@@ -21,14 +17,14 @@ impl UnixTimestamp {
     #[allow(unused)]
     pub(crate) fn from_iso8601_basic_format_date_time(s: &str) -> Result<Self, Error> {
         let chrono_date_time = chrono::NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%SZ")
-            .map_err(|_| ErrorKind::InvalidIso8601Format(s.to_string()))?
+            .map_err(|_| Error::InvalidIso8601Format(s.to_string()))?
             .and_utc();
         Self::try_from(chrono_date_time.timestamp())
     }
 
     pub(crate) fn from_rfc3339(s: &str) -> Result<Self, Error> {
         let chrono_date_time = chrono::DateTime::<chrono::FixedOffset>::parse_from_rfc3339(s)
-            .map_err(|_| ErrorKind::InvalidRfc3339Format(s.to_string()))?;
+            .map_err(|_| Error::InvalidRfc3339Format(s.to_string()))?;
         Self::try_from(chrono_date_time.timestamp())
     }
 
@@ -37,10 +33,10 @@ impl UnixTimestamp {
             i64::try_from(
                 system_time
                     .duration_since(SystemTime::UNIX_EPOCH)
-                    .map_err(|_| ErrorKind::OutOfRange(0))?
+                    .map_err(|_| Error::OutOfRange(0))?
                     .as_secs(),
             )
-            .map_err(|_| ErrorKind::OutOfRange(0))?,
+            .map_err(|_| Error::OutOfRange(0))?,
         )
     }
 
@@ -85,7 +81,7 @@ impl std::convert::TryFrom<i64> for UnixTimestamp {
         if (-62_167_219_200..=253_402_300_799).contains(&value) {
             Ok(Self(value))
         } else {
-            Err(ErrorKind::OutOfRange(value))?
+            Err(Error::OutOfRange(value))?
         }
     }
 }

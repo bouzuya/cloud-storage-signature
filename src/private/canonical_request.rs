@@ -3,11 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub(crate) struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error("header value contains non visible ascii characters")]
     HeaderValueContainsInvalidCharacter(http::header::ToStrError),
 }
@@ -36,7 +32,7 @@ impl CanonicalRequest {
                     .push(
                         value
                             .to_str()
-                            .map_err(ErrorKind::HeaderValueContainsInvalidCharacter)?,
+                            .map_err(Error::HeaderValueContainsInvalidCharacter)?,
                     );
             }
             canonical_headers

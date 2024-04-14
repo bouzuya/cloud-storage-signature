@@ -3,10 +3,10 @@ pub mod expiration;
 pub mod field;
 pub mod value;
 
-pub use self::condition::Condition;
-pub use self::expiration::Expiration;
-pub use self::field::Field;
-pub use self::value::Value;
+pub(crate) use self::condition::Condition;
+pub(crate) use self::expiration::Expiration;
+pub(crate) use self::field::Field;
+pub(crate) use self::value::Value;
 
 // <https://cloud.google.com/storage/docs/authentication/signatures#policy-document>
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

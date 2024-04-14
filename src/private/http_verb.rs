@@ -1,14 +1,10 @@
 #[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub struct Error(#[from] ErrorKind);
-
-#[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum Error {
     #[error("invalid http verb: {0}")]
     InvalidHttpVerb(String),
 }
 
-pub enum HttpVerb {
+pub(crate) enum HttpVerb {
     Delete,
     Get,
     Head,
@@ -39,7 +35,7 @@ impl std::str::FromStr for HttpVerb {
             "HEAD" => Ok(Self::Head),
             "POST" => Ok(Self::Post),
             "PUT" => Ok(Self::Put),
-            _ => Err(ErrorKind::InvalidHttpVerb(s.to_string()))?,
+            _ => Err(Error::InvalidHttpVerb(s.to_string()))?,
         }
     }
 }
