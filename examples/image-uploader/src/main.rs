@@ -164,7 +164,10 @@ async fn main() -> anyhow::Result<()> {
         use_sign_blob,
     };
     let router = axum::Router::new()
-        .route_service("/", tower_http::services::ServeFile::new("index.html"))
+        .route(
+            "/",
+            axum::routing::get(|| async { axum::response::Html(include_str!("../index.html")) }),
+        )
         .route(
             "/images",
             axum::routing::get(list_images).post(create_image),
