@@ -111,36 +111,36 @@ struct AccessToken {
 pub(crate) enum BoundTokenError {
     #[error("bound token / email request / build error: {0}")]
     EmailRequestBuild(#[source] reqwest::Error),
-    #[error("bound token / email request / execute error: {0}")]
-    EmailRequestExecute(#[source] reqwest::Error),
     #[error("bound token / email request / error response error: {0}")]
     EmailRequestErrorResponse(#[source] reqwest::Error),
+    #[error("bound token / email request / execute error: {0}")]
+    EmailRequestExecute(#[source] reqwest::Error),
     #[error("bound token / email request / status error: {0} {1}")]
     EmailRequestStatus(u16, String),
     #[error("bound token / email request / success response error: {0}")]
     EmailRequestSuccessResponse(#[source] reqwest::Error),
     #[error("bound token / signBlob request / build error: {0}")]
     SignBlobRequestBuild(#[source] reqwest::Error),
-    #[error("bound token / signBlob request / serialize error: {0}")]
-    SignBlobRequestSerialize(#[source] serde_json::Error),
-    #[error("bound token / signBlob request / execute error: {0}")]
-    SignBlobRequestExecute(#[source] reqwest::Error),
     #[error("bound token / signBlob request / error response error: {0}")]
     SignBlobRequestErrorResponse(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / execute error: {0}")]
+    SignBlobRequestExecute(#[source] reqwest::Error),
+    #[error("bound token / signBlob request / serialize error: {0}")]
+    SignBlobRequestSerialize(#[source] serde_json::Error),
     #[error("bound token / signBlob request / status error: {0} {1}")]
     SignBlobRequestStatus(u16, String),
     #[error("bound token / signBlob request / success response error: {0}")]
     SignBlobRequestSuccessResponse(#[source] reqwest::Error),
-    #[error("bound token / signBlob request / success response deserialize error: {0}")]
-    SignBlobRequestSuccessResponseDeserialize(#[source] serde_json::Error),
     #[error("bound token / signBlob request / success response base64 decode error: {0}")]
     SignBlobRequestSuccessResponseBase64Decode(#[source] base64::DecodeError),
+    #[error("bound token / signBlob request / success response deserialize error: {0}")]
+    SignBlobRequestSuccessResponseDeserialize(#[source] serde_json::Error),
     #[error("bound token / token request / build error: {0}")]
     TokenRequestBuild(#[source] reqwest::Error),
-    #[error("bound token / token request / execute error: {0}")]
-    TokenRequestExecute(#[source] reqwest::Error),
     #[error("bound token / token request / error response error: {0}")]
     TokenRequestErrorResponse(#[source] reqwest::Error),
+    #[error("bound token / token request / execute error: {0}")]
+    TokenRequestExecute(#[source] reqwest::Error),
     #[error("bound token / token request / invalid token_type error: {0}")]
     TokenRequestInvalidTokenType(String),
     #[error("bound token / token request / status error: {0} {1}")]
