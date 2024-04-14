@@ -16,8 +16,8 @@ async fn create_image(
         config:
             Config {
                 bucket_name,
-                service_account_client_email,
-                service_account_private_key,
+                signing_key,
+                use_sign_blob,
             },
         images,
     }): axum::extract::State<AppState>,
@@ -40,11 +40,11 @@ async fn create_image(
             accessible_at: None,
             expiration: std::time::SystemTime::now() + std::time::Duration::from_secs(60),
             region: None,
-            service_account_client_email: Some(service_account_client_email),
-            service_account_private_key: Some(service_account_private_key),
-            signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+            signing_key,
+            use_sign_blob,
         })
         .build()
+        .await
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?
         .into_vec();
 
@@ -69,8 +69,8 @@ async fn list_images(
         config:
             Config {
                 bucket_name,
-                service_account_client_email,
-                service_account_private_key,
+                signing_key,
+                use_sign_blob,
             },
         images,
     }): axum::extract::State<AppState>,
@@ -86,16 +86,17 @@ async fn list_images(
         }
         let signed_url = cloud_storage_signature::build_signed_url(
             cloud_storage_signature::BuildSignedUrlOptions {
-                service_account_client_email: service_account_client_email.clone(),
-                service_account_private_key: service_account_private_key.clone(),
                 bucket_name: bucket_name.clone(),
                 object_name: image.id,
                 region: None,
                 expires: std::time::SystemTime::now() + std::time::Duration::from_secs(60),
                 http_method: "GET".to_string(),
                 accessible_at: None,
+                signing_key: signing_key.clone(),
+                use_sign_blob,
             },
         )
+        .await
         .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         signed_urls.push(signed_url);
     }
@@ -132,8 +133,8 @@ struct AppState {
 #[derive(Clone)]
 struct Config {
     bucket_name: String,
-    service_account_client_email: String,
-    service_account_private_key: String,
+    signing_key: cloud_storage_signature::SigningKey,
+    use_sign_blob: bool,
 }
 
 #[derive(Clone)]
@@ -144,13 +145,23 @@ struct Image {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let service_account = cloud_storage_signature::ServiceAccountCredentials::load(std::env::var(
-        "GOOGLE_APPLICATION_CREDENTIALS",
-    )?)?;
+    use std::str::FromStr as _;
+    let use_sign_blob = bool::from_str(std::env::var("USE_SIGN_BLOB")?.as_str())?;
+    let signing_key = if use_sign_blob {
+        cloud_storage_signature::SigningKey::bound_token()
+    } else {
+        let service_account = cloud_storage_signature::ServiceAccountCredentials::load(
+            std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?,
+        )?;
+        cloud_storage_signature::SigningKey::service_account(
+            service_account.client_email,
+            service_account.private_key,
+        )
+    };
     let config = Config {
         bucket_name: std::env::var("BUCKET_NAME")?,
-        service_account_client_email: service_account.client_email,
-        service_account_private_key: service_account.private_key,
+        signing_key,
+        use_sign_blob,
     };
     let router = axum::Router::new()
         .route_service("/", tower_http::services::ServeFile::new("index.html"))

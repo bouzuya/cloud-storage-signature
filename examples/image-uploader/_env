@@ -2,4 +2,5 @@
 BUCKET_NAME=
 # set your service account file path
 GOOGLE_APPLICATION_CREDENTIALS=
+USE_SIGN_BLOB=false
 PORT=3000
