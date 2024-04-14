@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_add_signed_url_required_query_string_parameters() -> anyhow::Result<()> {
-        let unix_timestamp = i64::from(UnixTimestamp::from_rfc3339("2020-01-02T03:04:05Z")?);
+        let unix_timestamp = UnixTimestamp::from_rfc3339("2020-01-02T03:04:05Z")?;
         let expiration = Expiration::try_from(604800)?;
         let service_account_client_email = "service_account_name1";
         let mut request = http::Request::builder()
@@ -179,9 +179,9 @@ mod tests {
             &mut request,
             service_account_client_email,
             SigningAlgorithm::Goog4RsaSha256,
-            ActiveDatetime::from_unix_timestamp(unix_timestamp)?,
+            ActiveDatetime::from_unix_timestamp_obj(unix_timestamp),
             &CredentialScope::new(
-                Date::from_unix_timestamp(unix_timestamp)?,
+                Date::from_unix_timestamp_obj(unix_timestamp),
                 Location::try_from("us-central1")?,
                 Service::Storage,
                 RequestType::Goog4Request,
