@@ -1,5 +1,7 @@
 use std::{collections::BTreeSet, vec};
 
+use crate::SigningKey;
+
 use super::ActiveDatetime;
 use super::CredentialScope;
 use super::Expiration;
@@ -30,14 +32,16 @@ impl SignedUrl {
         credential_scope: &CredentialScope,
         active_datetime: ActiveDatetime,
         expiration: Expiration,
-        service_account_client_email: &str,
-        service_account_private_key: &str,
         mut request: http::Request<()>,
+        signing_key: SigningKey,
+        use_sign_blob: bool,
     ) -> Result<Self, Error> {
+        // FIXME: handle error
+        let service_account_client_email = signing_key.authorizer().await.unwrap();
         let x_goog_algorithm = SigningAlgorithm::Goog4RsaSha256;
         add_signed_url_required_query_string_parameters(
             &mut request,
-            service_account_client_email,
+            service_account_client_email.as_str(),
             x_goog_algorithm,
             active_datetime,
             credential_scope,
@@ -53,13 +57,10 @@ impl SignedUrl {
 
         // FIXME: handle error
         let message = string_to_sign.to_string();
-        let message_digest = crate::SigningKey::service_account(
-            service_account_client_email.to_string(),
-            service_account_private_key.to_string(),
-        )
-        .sign(false, message.as_bytes())
-        .await
-        .unwrap();
+        let message_digest = signing_key
+            .sign(use_sign_blob, message.as_bytes())
+            .await
+            .unwrap();
         let request_signature = hex_encode(&message_digest);
 
         let hostname = "https://storage.googleapis.com";

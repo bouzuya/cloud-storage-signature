@@ -29,6 +29,10 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key = SigningKey::service_account(
+        service_account_client_email.clone(),
+        service_account_private_key.clone(),
+    );
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "foo";
 
@@ -39,10 +43,7 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
             accessible_at: None,
             expiration: SystemTime::now() + Duration::from_secs(2),
             region: None,
-            signing_key: SigningKey::service_account(
-                service_account_client_email.clone(),
-                service_account_private_key.clone(),
-            ),
+            signing_key: signing_key.clone(),
             use_sign_blob: false,
         })
         .build()
@@ -67,14 +68,14 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
     assert_eq!(response.text().await?, "");
 
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
+        signing_key,
+        use_sign_blob: false,
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -93,6 +94,7 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -101,16 +103,18 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key =
+        SigningKey::service_account(service_account_client_email, service_account_private_key);
     let now = SystemTime::now();
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email: service_account_client_email.clone(),
-        service_account_private_key: service_account_private_key.clone(),
         bucket_name: bucket_name.clone(),
         object_name: object_name.to_string(),
         region: None,
         expires: now + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: Some(now),
+        signing_key: signing_key.clone(),
+        use_sign_blob: false,
     })
     .await?;
     let client = reqwest::Client::new();
@@ -124,14 +128,14 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
     assert_eq!(response.status().as_u16(), 204);
 
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
+        signing_key: signing_key.clone(),
+        use_sign_blob: false,
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -150,6 +154,7 @@ async fn test_get() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -158,15 +163,17 @@ async fn test_get() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key =
+        SigningKey::service_account(service_account_client_email, service_account_private_key);
     let signed_url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
+        signing_key,
+        use_sign_blob: false,
     })
     .await?;
 
@@ -183,6 +190,7 @@ async fn test_get_timeout() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -191,15 +199,17 @@ async fn test_get_timeout() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key =
+        SigningKey::service_account(service_account_client_email, service_account_private_key);
     let signed_url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(1),
         http_method: "GET".to_string(),
         accessible_at: None,
+        signing_key,
+        use_sign_blob: false,
     })
     .await?;
 
@@ -217,6 +227,7 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
@@ -225,15 +236,17 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key =
+        SigningKey::service_account(service_account_client_email, service_account_private_key);
     let signed_url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: None,
+        signing_key,
+        use_sign_blob: false,
     })
     .await?;
 
@@ -249,6 +262,7 @@ async fn test_post() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "b.txt";
@@ -257,15 +271,17 @@ async fn test_post() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key =
+        SigningKey::service_account(service_account_client_email, service_account_private_key);
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email: service_account_client_email.clone(),
-        service_account_private_key: service_account_private_key.clone(),
         bucket_name: bucket_name.clone(),
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: None,
+        signing_key: signing_key.clone(),
+        use_sign_blob: false,
     })
     .await?;
     let client = reqwest::Client::new();
@@ -276,14 +292,14 @@ async fn test_post() -> anyhow::Result<()> {
     assert_eq!(response.status().as_u16(), 204);
 
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
+        signing_key,
+        use_sign_blob: false,
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -299,6 +315,7 @@ async fn test_post_bin() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "c.png";
@@ -307,15 +324,17 @@ async fn test_post_bin() -> anyhow::Result<()> {
         client_email: service_account_client_email,
         private_key: service_account_private_key,
     } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
+    let signing_key =
+        SigningKey::service_account(service_account_client_email, service_account_private_key);
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email: service_account_client_email.clone(),
-        service_account_private_key: service_account_private_key.clone(),
         bucket_name: bucket_name.clone(),
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: None,
+        signing_key: signing_key.clone(),
+        use_sign_blob: false,
     })
     .await?;
     let client = reqwest::Client::new();
@@ -329,14 +348,14 @@ async fn test_post_bin() -> anyhow::Result<()> {
     assert_eq!(response.status().as_u16(), 204);
 
     let url = build_signed_url(BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name: object_name.to_string(),
         region: None,
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
+        signing_key,
+        use_sign_blob: false,
     })
     .await?;
     let response = reqwest::get(url).await?;

@@ -87,28 +87,28 @@ enum ErrorKind {
     SignedUrl(crate::private::signed_url::Error),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
 pub struct BuildSignedUrlOptions {
-    pub service_account_client_email: String,
-    pub service_account_private_key: String,
     pub bucket_name: String,
     pub object_name: String,
     pub region: Option<String>,
     pub expires: SystemTime,
     pub http_method: String,
     pub accessible_at: Option<SystemTime>,
+    pub signing_key: SigningKey,
+    pub use_sign_blob: bool,
 }
 
 pub async fn build_signed_url(
     BuildSignedUrlOptions {
-        service_account_client_email,
-        service_account_private_key,
         bucket_name,
         object_name,
         region,
         expires,
         http_method,
         accessible_at,
+        signing_key,
+        use_sign_blob,
     }: BuildSignedUrlOptions,
 ) -> Result<String, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
@@ -148,9 +148,9 @@ pub async fn build_signed_url(
         &credential_scope,
         ActiveDatetime::from_unix_timestamp_obj(now),
         Expiration::try_from(expiration).map_err(ErrorKind::Expiration)?,
-        &service_account_client_email,
-        &service_account_private_key,
         request,
+        signing_key,
+        use_sign_blob,
     )
     .await
     .map_err(ErrorKind::SignedUrl)?;
