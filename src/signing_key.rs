@@ -3,6 +3,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+use crate::private::SigningAlgorithm;
+
 #[derive(Clone)]
 pub struct SigningKey(KeyInner);
 
@@ -73,10 +75,12 @@ impl SigningKey {
         }
     }
 
-    pub(crate) fn x_goog_algorithm(&self) -> &'static str {
+    pub(crate) fn x_goog_algorithm(&self) -> SigningAlgorithm {
         match self.0 {
-            KeyInner::BoundToken(_) | KeyInner::ServiceAccount { .. } => "GOOG4-RSA-SHA256",
-            KeyInner::Hmac { .. } => "GOOG4-HMAC-SHA256",
+            KeyInner::BoundToken(_) | KeyInner::ServiceAccount { .. } => {
+                SigningAlgorithm::Goog4RsaSha256
+            }
+            KeyInner::Hmac { .. } => SigningAlgorithm::Goog4HmacSha256,
         }
     }
 }

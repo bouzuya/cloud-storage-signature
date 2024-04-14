@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use crate::{
     private::{
         hex_encode, policy_document, utils::UnixTimestamp, CredentialScope, Date, Location,
-        RequestType, Service,
+        RequestType, Service, SigningAlgorithm,
     },
     signing_key::SigningKey,
 };
@@ -423,7 +423,7 @@ impl HtmlFormDataBuilder {
                 let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
                 let x_goog_algorithm = signing_key.x_goog_algorithm();
                 // TODO: x_goog_algorithm "GOOG4-HMAC-SHA256" is not supported yet
-                if x_goog_algorithm != "GOOG4-RSA-SHA256" {
+                if x_goog_algorithm != SigningAlgorithm::Goog4RsaSha256 {
                     // TODO: return an error if hmac and use_sign_blob
                     return Err(Error::from(ErrorKind::XGoogAlgorithmNotSupported));
                 }
@@ -516,7 +516,7 @@ impl HtmlFormDataBuilder {
                 conditions.push(policy_document::Condition::ExactMatching(
                     policy_document::Field::new("x-goog-algorithm")
                         .expect("x-goog-algorithm to be valid field name"),
-                    policy_document::Value::new(x_goog_algorithm),
+                    policy_document::Value::new(x_goog_algorithm.as_str()),
                 ));
                 conditions.push(policy_document::Condition::ExactMatching(
                     policy_document::Field::new("x-goog-credential")
@@ -563,7 +563,7 @@ impl HtmlFormDataBuilder {
                 let x_goog_signature = hex_encode(&message_digest);
                 Ok((
                     Some(encoded_policy),
-                    Some(x_goog_algorithm.to_string()),
+                    Some(x_goog_algorithm.as_str().to_string()),
                     Some(x_goog_credential),
                     Some(x_goog_date),
                     Some(x_goog_signature),
@@ -628,13 +628,9 @@ mod tests {
             .content_type("application/octet-stream")
             .expires("2022-01-01T00:00:00Z")
             .key("example-object")
-            //     .policy(true)
             .success_action_redirect("https://example.com/success")
             .success_action_status(201)
-            //     .x_goog_algorithm("GOOG4-RSA-SHA256")
-            //     .x_goog_credential("example-credential")
             .x_goog_custom_time("2022-01-01T00:00:00Z")
-            //     .x_goog_date("2022-01-01T00:00:00Z")
             .x_goog_meta("reviewer", "jane")
             .x_goog_meta("project-manager", "john")
             .build()
