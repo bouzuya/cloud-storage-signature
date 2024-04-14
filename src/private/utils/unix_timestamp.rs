@@ -18,10 +18,7 @@ enum ErrorKind {
 pub(crate) struct UnixTimestamp(i64);
 
 impl UnixTimestamp {
-    pub(crate) fn now() -> Self {
-        Self::from_system_time(SystemTime::now()).expect("now to be valid")
-    }
-
+    #[allow(unused)]
     pub(crate) fn from_iso8601_basic_format_date_time(s: &str) -> Result<Self, Error> {
         let chrono_date_time = chrono::NaiveDateTime::parse_from_str(s, "%Y%m%dT%H%M%SZ")
             .map_err(|_| ErrorKind::InvalidIso8601Format(s.to_string()))?
@@ -56,20 +53,21 @@ impl UnixTimestamp {
         year * 10000 + month * 100 + day
     }
 
+    pub(crate) fn to_iso8601_basic_format_date_time(self) -> String {
+        let chrono_date_time =
+            chrono::DateTime::from_timestamp(self.0, 0_u32).expect("self.0 to be valid timestamp");
+        chrono_date_time.format("%Y%m%dT%H%M%SZ").to_string()
+    }
+
     pub(crate) fn to_rfc3339(self) -> String {
         let chrono_date_time =
             chrono::DateTime::from_timestamp(self.0, 0_u32).expect("self.0 to be valid timestamp");
         chrono_date_time.format("%Y-%m-%dT%H:%M:%SZ").to_string()
     }
 
+    #[allow(unused)]
     pub(crate) fn to_system_time(self) -> SystemTime {
         SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(self.0 as u64)
-    }
-
-    pub(crate) fn to_iso8601_basic_format_date_time(self) -> String {
-        let chrono_date_time =
-            chrono::DateTime::from_timestamp(self.0, 0_u32).expect("self.0 to be valid timestamp");
-        chrono_date_time.format("%Y%m%dT%H%M%SZ").to_string()
     }
 }
 
