@@ -134,6 +134,7 @@ name = "cloud-storage-signature"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "base64",
  "chrono",
  "form_urlencoded",

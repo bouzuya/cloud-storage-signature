@@ -1,8 +1,11 @@
 use std::time::SystemTime;
 
-use crate::private::{
-    hex_encode, policy_document, sign, utils::UnixTimestamp, CredentialScope, Date, Location,
-    RequestType, Service, SigningAlgorithm,
+use crate::{
+    private::{
+        hex_encode, policy_document, utils::UnixTimestamp, CredentialScope, Date, Location,
+        RequestType, Service,
+    },
+    signing_key::SigningKey,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -10,7 +13,7 @@ use crate::private::{
 pub struct Error(#[from] ErrorKind);
 
 #[derive(Debug, thiserror::Error)]
-enum ErrorKind {
+pub(crate) enum ErrorKind {
     #[error("accessible_at out of range")]
     AccessibleAtOutOfRange,
     #[error("bucket not found")]
@@ -23,10 +26,6 @@ enum ErrorKind {
     KeyNotFound,
     #[error("policy document serialization")]
     PolicyDocumentSerialization,
-    #[error("service account client email not found")]
-    ServiceAccountClientEmailNotFound,
-    #[error("service account private key not found")]
-    ServiceAccountPrivateKeyNotFound,
     #[error("service account private key parsing")]
     ServiceAccountPrivateKeyParsing,
     #[error(transparent)]
@@ -46,11 +45,12 @@ enum ErrorKind {
 /// # Example (full)
 ///
 /// ```rust
-/// # fn example_for_html_form_data_full() -> anyhow::Result<()> {
+/// # async fn example_for_html_form_data_full() -> anyhow::Result<()> {
 /// #     let service_account_client_email = "test@example.com";
 /// #     let service_account_private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n";
 /// use cloud_storage_signature::HtmlFormData;
 /// use cloud_storage_signature::PolicyDocumentSigningOptions;
+/// use cloud_storage_signature::SigningKey;
 /// let form_data = HtmlFormData::builder()
 ///     .acl("public-read")
 ///     .bucket("example-bucket")
@@ -70,11 +70,14 @@ enum ErrorKind {
 ///         accessible_at: None,
 ///         expiration: std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60),
 ///         region: None,
-///         service_account_client_email: Some(service_account_client_email.to_string()),
-///         service_account_private_key: Some(service_account_private_key.to_string()),
-///         signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+///         signing_key: SigningKey::service_account(
+///             service_account_client_email.to_string(),
+///             service_account_private_key.to_string(),
+///         ),
+///         use_sign_blob: false,
 ///     })
-///     .build()?;
+///     .build()
+///     .await?;
 /// assert_eq!(
 ///   form_data.into_vec().into_iter().map(|(n, _)| n).collect::<Vec<String>>(),
 ///   [
@@ -106,13 +109,14 @@ enum ErrorKind {
 /// # Example (minimal)
 ///
 /// ```rust
-/// # fn example_for_html_form_data_minimal() -> Result<(), cloud_storage_signature::html_form_data::Error>
+/// # async fn example_for_html_form_data_minimal() -> Result<(), cloud_storage_signature::html_form_data::Error>
 /// # {
 /// use cloud_storage_signature::HtmlFormData;
 /// assert_eq!(
 ///     HtmlFormData::builder()
 ///         .key("object_name1")
-///         .build()?
+///         .build()
+///         .await?
 ///         .into_vec(),
 ///     vec![("key".to_string(), "object_name1".to_string())]
 /// );
@@ -123,11 +127,12 @@ enum ErrorKind {
 /// # Example (policy document minimal)
 ///
 /// ```rust
-/// # fn example_for_html_form_data_with_policy_document() -> anyhow::Result<()> {
+/// # async fn example_for_html_form_data_with_policy_document() -> anyhow::Result<()> {
 /// #     let service_account_client_email = "test@example.com";
 /// #     let service_account_private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n";
 /// use cloud_storage_signature::HtmlFormData;
 /// use cloud_storage_signature::PolicyDocumentSigningOptions;
+/// use cloud_storage_signature::SigningKey;
 /// let form_data = HtmlFormData::builder()
 ///     .bucket("example-bucket")
 ///     .key("example-object")
@@ -135,11 +140,14 @@ enum ErrorKind {
 ///         accessible_at: None,
 ///         expiration: std::time::SystemTime::now() + std::time::Duration::from_secs(60 * 60),
 ///         region: None,
-///         service_account_client_email: Some(service_account_client_email.to_string()),
-///         service_account_private_key: Some(service_account_private_key.to_string()),
-///         signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+///         signing_key: SigningKey::service_account(
+///             service_account_client_email.to_string(),
+///             service_account_private_key.to_string()
+///         ),
+///         use_sign_blob: false,
 ///     })
-///     .build()?;
+///     .build()
+///     .await?;
 /// assert_eq!(
 ///   form_data.into_vec().into_iter().map(|(n, _)| n).collect::<Vec<String>>(),
 ///   [
@@ -179,9 +187,8 @@ pub struct PolicyDocumentSigningOptions {
     pub accessible_at: Option<SystemTime>,
     pub expiration: SystemTime,
     pub region: Option<String>,
-    pub service_account_client_email: Option<String>,
-    pub service_account_private_key: Option<String>,
-    pub signing_algorithm: String,
+    pub signing_key: SigningKey,
+    pub use_sign_blob: bool,
 }
 
 /// HTML Form Data Builder.
@@ -227,9 +234,9 @@ impl HtmlFormDataBuilder {
     }
 
     /// Builds the `HtmlFormData`.
-    pub fn build(self) -> Result<HtmlFormData, Error> {
+    pub async fn build(self) -> Result<HtmlFormData, Error> {
         let (policy, x_goog_algorithm, x_goog_credential, x_goog_date, x_goog_signature) =
-            self.build_policy_and_x_goog_signature()?;
+            self.build_policy_and_x_goog_signature().await?;
 
         let mut vec = vec![];
         if let Some(acl) = self.acl {
@@ -377,7 +384,7 @@ impl HtmlFormDataBuilder {
     // .3: x-goog-date
     // .4: x-goog-signature
     #[allow(clippy::type_complexity)]
-    fn build_policy_and_x_goog_signature(
+    async fn build_policy_and_x_goog_signature(
         &self,
     ) -> Result<
         (
@@ -395,9 +402,8 @@ impl HtmlFormDataBuilder {
                 accessible_at,
                 expiration,
                 region,
-                service_account_client_email,
-                service_account_private_key,
-                signing_algorithm,
+                signing_key,
+                use_sign_blob,
             }) => {
                 let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
                 let expiration = *expiration;
@@ -411,18 +417,14 @@ impl HtmlFormDataBuilder {
                 let region = region.as_deref().unwrap_or("auto");
                 let bucket = self.bucket.as_deref().ok_or(ErrorKind::BucketNotFound)?;
                 let key = self.key.as_deref().ok_or(ErrorKind::KeyNotFound)?;
-                let x_goog_algorithm = signing_algorithm;
+                let x_goog_algorithm = signing_key.x_goog_algorithm();
                 // TODO: x_goog_algorithm "GOOG4-HMAC-SHA256" is not supported yet
                 if x_goog_algorithm != "GOOG4-RSA-SHA256" {
+                    // TODO: return an error if hmac and use_sign_blob
                     return Err(Error::from(ErrorKind::XGoogAlgorithmNotSupported));
                 }
 
-                let service_account_client_email = service_account_client_email
-                    .as_deref()
-                    .ok_or(ErrorKind::ServiceAccountClientEmailNotFound)?;
-                let service_account_private_key = service_account_private_key
-                    .as_deref()
-                    .ok_or(ErrorKind::ServiceAccountPrivateKeyNotFound)?;
+                let service_account_client_email = signing_key.authorizer().await?;
 
                 let credential_scope = CredentialScope::new(
                     Date::from_unix_timestamp_obj(accessible_at),
@@ -553,17 +555,8 @@ impl HtmlFormDataBuilder {
                     policy.as_bytes(),
                 );
                 let message = encoded_policy.as_str();
-                let pkcs8 = pem::parse(service_account_private_key.as_bytes())
-                    .map_err(|_| ErrorKind::ServiceAccountPrivateKeyParsing)?;
-                let signing_key = pkcs8.contents();
-                let message_digest = sign(
-                    SigningAlgorithm::Goog4RsaSha256,
-                    signing_key,
-                    message.as_bytes(),
-                )
-                .map_err(ErrorKind::Sign)?;
+                let message_digest = signing_key.sign(*use_sign_blob, message.as_bytes()).await?;
                 let x_goog_signature = hex_encode(&message_digest);
-
                 Ok((
                     Some(encoded_policy),
                     Some(x_goog_algorithm.to_string()),
@@ -580,9 +573,12 @@ impl HtmlFormDataBuilder {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_key_only() -> Result<(), Error> {
-        let form_data = HtmlFormData::builder().key("example-object").build()?;
+    #[tokio::test]
+    async fn test_key_only() -> Result<(), Error> {
+        let form_data = HtmlFormData::builder()
+            .key("example-object")
+            .build()
+            .await?;
         assert_eq!(
             form_data.into_vec(),
             vec![("key".to_string(), "example-object".to_string())]
@@ -590,29 +586,34 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_key_not_found() {
+    #[tokio::test]
+    async fn test_key_not_found() {
         assert_eq!(
-            HtmlFormData::builder().build().unwrap_err().to_string(),
+            HtmlFormData::builder()
+                .build()
+                .await
+                .unwrap_err()
+                .to_string(),
             "key not found"
         );
     }
 
-    #[test]
-    fn test_x_goog_meta_name_empty() {
+    #[tokio::test]
+    async fn test_x_goog_meta_name_empty() {
         assert_eq!(
             HtmlFormData::builder()
                 .key("example-object")
                 .x_goog_meta("", "value")
                 .build()
+                .await
                 .unwrap_err()
                 .to_string(),
             "x-goog-meta-* field name is empty"
         );
     }
 
-    #[test]
-    fn test_when_policy_is_false() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_when_policy_is_false() -> anyhow::Result<()> {
         let form_data = HtmlFormData::builder()
             .acl("public-read")
             .bucket("example-bucket")
@@ -632,7 +633,8 @@ mod tests {
             //     .x_goog_date("2022-01-01T00:00:00Z")
             .x_goog_meta("reviewer", "jane")
             .x_goog_meta("project-manager", "john")
-            .build()?;
+            .build()
+            .await?;
         assert_eq!(
             form_data.into_vec(),
             vec![
@@ -667,8 +669,10 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn test_when_policy_is_true() -> anyhow::Result<()> {
+    #[tokio::test]
+    async fn test_when_policy_is_true() -> anyhow::Result<()> {
+        let client_email = "test@example.com".to_string();
+        let private_key = "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n".to_string();
         let form_data = HtmlFormData::builder()
             .acl("public-read")
             .bucket("example-bucket")
@@ -685,14 +689,16 @@ mod tests {
             .x_goog_meta("reviewer", "jane")
             .x_goog_meta("project-manager", "john")
             .policy_document_signing_options(PolicyDocumentSigningOptions {
-                accessible_at: Some(UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time()),
+                accessible_at: Some(
+                    UnixTimestamp::from_rfc3339("2022-01-01T00:00:00Z")?.to_system_time(),
+                ),
                 expiration: UnixTimestamp::from_rfc3339("2022-01-02T00:00:00Z")?.to_system_time(),
                 region: None,
-                service_account_client_email: Some("test@example.com".to_string()),
-                service_account_private_key: Some("-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQChK9QyIk4mpcaO\nxXY+DIb8xsJKXfqAgzsboG/Ho8W9C6NZwM0+7kuV39QrP+UGo5GTpKfe3gZYQMoP\nHIAirNMa/K3/8oczucts+ZueWzCdElZ0+E04BLRkWNUM86hQ0TIL+jCi83JZHaGY\npjgMSUUDj+vJc5QjYmu2zGHAsWvBUfIQc6/Am+shtQG1gPpxTKlXS117pIzlAz8Z\nahRKJHn33fpBudYYDKm1fsyCFPS05rBBvjrvGNsGJn/6rRb8+ixVr6LOipSZ5KbS\n+/kvxQSTa7nKKqCoK1fUp+k489IL0XWW4z5PrBNNBjE0oQ3yfnkVW/LBNsrFjT6x\nAOKis8QZAgMBAAECggEABVuCHbqDM4iuLX/F2vEqqYtn2PX/xjbWh6gRHydEAvE4\nmFqu1+ku7Qf4MwnYMJzOUYSXKfLibhuVO+RcJArvp4V/uTLUKLWD3Bb+A8kPOCFs\na033ryWE45MKXfhZf3o8uiYyaLBD/E9eWEcqNMpYt3IYyeUEJxr17qkjlLaxGMd1\nixQdDSS8d48EyMg8RaA2q5l5sG5CoxeEFX7BR3SCjqNS8lzZcQ70mdJjtbmRd7st\nggbcZzd8C2XlT5QFSAEge0uRHEo2d48o09PkTAT4AfsjlYmAhAL1ph0fVPdnXSVk\ng/8u8BGM3WwBIL3jmV/uy5dDmLCv7XwsWxBEnmbwKQKBgQDTbq6QiA+lvLIlpUpA\nmRgWvpHRNv5axSmN77RDcrm96GUrXyLakDmZ/NiAp727RRMcsDkxhTnav/gcQwUC\nl9wCT8ItT32e23HxyQ4kkejrMGtsQyxqd3gN0QzkgAwWQPJMf4vgXOL50lB9Dos1\n5G2p7aUHTLVHqK602S5LbntFhQKBgQDDJPQrlpUhV6zb+B8ZhAJ6SyZUhQ0+81qk\nDxzXdMpUR6gYxzvB5thUqxP9dXuSW7b+L8Pa7ayOxXQqyS+HYKnFJfGkSG2kZMWB\n+zbZgPq1Nq6QyELGFQd3t7g6AOmTL6q7K/D2ghfIGwL2R3TuDrVOW/EQ8mMBAbZP\nLT1FKRvuhQKBgEnBnKfSrxK0BrlXNdXfEiYtCJUhSA3GJb7b1diJlv4GqfQ9Vd1E\n3rM3HxeSbH99kzM4zlrWDN6ghR7mykKjUx6DUEuaJUpbZx5fcs2TENuqom676Cyj\nzH+VY5f6izzgHyZMgDEedheMJIPbpPiB3TegLSekvMBoublg4eNygRI5AoGBALKo\nQmMlmaLNAhThNJfHo/0SkCURKu9XHMTWkTEwW4yNjfghbzQ2hBgACG0kAd4c2Ywd\nbtIghrqvS4tgZYMrnEJCWths9vRqzegSdkTrMJx3U5p5vahb2FpieOehrjZyjXyO\n3izRLbSmBjAze3n3PUZgJnO9daaWSrJyWIXY/RmBAoGBAJasPa2BUV5dg/huiLDE\nnjhWxr2ezceoSxNyhLgmpS2vrBtJWWE4pRVZgJPqbXwMsSfjQqSGp0QWWJ1KHpIv\nn32eCAbgj/9wrwoU9u3cEA4BhYHjg3p9empYdLMJgeLAvKpUbvKbEkZITDFtkWis\njI3VAsh2OHCsO8ToNwX3Kgku\n-----END PRIVATE KEY-----\n".to_string()),
-                signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
+                signing_key: SigningKey::service_account(client_email, private_key),
+                use_sign_blob: false,
             })
-            .build()?;
+            .build()
+            .await?;
         assert_eq!(
           form_data.into_vec(),
           [

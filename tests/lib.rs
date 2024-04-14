@@ -1,13 +1,14 @@
 use std::time::{Duration, SystemTime};
 
-#[test]
-fn test_readme_html_form_data_example() -> Result<(), cloud_storage_signature::html_form_data::Error>
-{
+#[tokio::test]
+async fn test_readme_html_form_data_example(
+) -> Result<(), cloud_storage_signature::html_form_data::Error> {
     use cloud_storage_signature::HtmlFormData;
     assert_eq!(
         HtmlFormData::builder()
             .key("object_name1")
-            .build()?
+            .build()
+            .await?
             .into_vec(),
         vec![("key".to_string(), "object_name1".to_string())]
     );
@@ -22,6 +23,7 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
     use cloud_storage_signature::HtmlFormData;
     use cloud_storage_signature::PolicyDocumentSigningOptions;
     use cloud_storage_signature::ServiceAccountCredentials;
+    use cloud_storage_signature::SigningKey;
 
     let ServiceAccountCredentials {
         client_email: service_account_client_email,
@@ -37,11 +39,14 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
             accessible_at: None,
             expiration: SystemTime::now() + Duration::from_secs(2),
             region: None,
-            signing_algorithm: "GOOG4-RSA-SHA256".to_string(),
-            service_account_client_email: Some(service_account_client_email.clone()),
-            service_account_private_key: Some(service_account_private_key.clone()),
+            signing_key: SigningKey::service_account(
+                service_account_client_email.clone(),
+                service_account_private_key.clone(),
+            ),
+            use_sign_blob: false,
         })
-        .build()?
+        .build()
+        .await?
         .into_vec();
     let client = reqwest::Client::new();
     let response = client
@@ -70,7 +75,8 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
     let response = reqwest::get(url).await?;
     assert_eq!(response.status().as_u16(), 200);
     assert_eq!(
@@ -105,7 +111,8 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         expires: now + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: Some(now),
-    })?;
+    })
+    .await?;
     let client = reqwest::Client::new();
     let form = reqwest::multipart::Form::new()
         .text("key", object_name)
@@ -125,7 +132,8 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
     let response = reqwest::get(url).await?;
     assert_eq!(response.status().as_u16(), 200);
     assert_eq!(
@@ -159,7 +167,8 @@ async fn test_get() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
 
     let response = reqwest::get(signed_url).await?;
     assert_eq!(response.status().as_u16(), 200);
@@ -191,7 +200,8 @@ async fn test_get_timeout() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(1),
         http_method: "GET".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
 
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
@@ -224,7 +234,8 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
 
     let response = reqwest::get(signed_url).await?;
     assert_eq!(response.status().as_u16(), 403);
@@ -255,7 +266,8 @@ async fn test_post() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
     let client = reqwest::Client::new();
     let form = reqwest::multipart::Form::new()
         .text("key", object_name)
@@ -272,7 +284,8 @@ async fn test_post() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
     let response = reqwest::get(url).await?;
     assert_eq!(response.status().as_u16(), 200);
     assert_eq!(response.text().await?, "bar");
@@ -303,7 +316,8 @@ async fn test_post_bin() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "POST".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
     let client = reqwest::Client::new();
     let form = reqwest::multipart::Form::new()
         .text("key", object_name)
@@ -323,7 +337,8 @@ async fn test_post_bin() -> anyhow::Result<()> {
         expires: SystemTime::now() + Duration::from_secs(2),
         http_method: "GET".to_string(),
         accessible_at: None,
-    })?;
+    })
+    .await?;
     let response = reqwest::get(url).await?;
     assert_eq!(response.status().as_u16(), 200);
     assert_eq!(

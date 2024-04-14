@@ -8,13 +8,14 @@
 //! <https://cloud.google.com/storage/docs/xml-api/post-object-forms>
 //!
 //! ```rust
-//! # fn test_readme_html_form_data_example() -> Result<(), cloud_storage_signature::html_form_data::Error>
+//! # async fn test_readme_html_form_data_example() -> Result<(), cloud_storage_signature::html_form_data::Error>
 //! # {
 //! use cloud_storage_signature::HtmlFormData;
 //! assert_eq!(
 //!     HtmlFormData::builder()
 //!         .key("object_name1")
-//!         .build()?
+//!         .build()
+//!         .await?
 //!         .into_vec(),
 //!     vec![("key".to_string(), "object_name1".to_string())]
 //! );
@@ -28,6 +29,7 @@
 pub mod html_form_data;
 mod private;
 mod service_account_credentials;
+mod signing_key;
 
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -45,6 +47,7 @@ use self::private::SignedUrl;
 
 pub use self::html_form_data::{HtmlFormData, HtmlFormDataBuilder, PolicyDocumentSigningOptions};
 pub use self::service_account_credentials::ServiceAccountCredentials;
+pub use self::signing_key::SigningKey;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -96,7 +99,7 @@ pub struct BuildSignedUrlOptions {
     pub accessible_at: Option<SystemTime>,
 }
 
-pub fn build_signed_url(
+pub async fn build_signed_url(
     BuildSignedUrlOptions {
         service_account_client_email,
         service_account_private_key,
@@ -149,6 +152,7 @@ pub fn build_signed_url(
         &service_account_private_key,
         request,
     )
+    .await
     .map_err(ErrorKind::SignedUrl)?;
     Ok(String::from(signed_url))
 }

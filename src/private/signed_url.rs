@@ -19,8 +19,6 @@ enum ErrorKind {
     HostHeaderNotFound,
     #[error("pem key rejected: {0}")]
     KeyRejected(ring::error::KeyRejected),
-    #[error("pem: {0}")]
-    Pem(pem::PemError),
     #[error("sign: {0}")]
     Sign(ring::error::Unspecified),
 }
@@ -28,7 +26,7 @@ enum ErrorKind {
 pub struct SignedUrl(String);
 
 impl SignedUrl {
-    pub(crate) fn new(
+    pub(crate) async fn new(
         credential_scope: &CredentialScope,
         active_datetime: ActiveDatetime,
         expiration: Expiration,
@@ -53,10 +51,15 @@ impl SignedUrl {
             CanonicalRequest::new(&request).map_err(ErrorKind::CanonicalRequest)?,
         );
 
+        // FIXME: handle error
         let message = string_to_sign.to_string();
-        let pkcs8 = pem::parse(service_account_private_key.as_bytes()).map_err(ErrorKind::Pem)?;
-        let signing_key = pkcs8.contents();
-        let message_digest = sign(x_goog_algorithm, signing_key, message.as_bytes())?;
+        let message_digest = crate::SigningKey::service_account(
+            service_account_client_email.to_string(),
+            service_account_private_key.to_string(),
+        )
+        .sign(false, message.as_bytes())
+        .await
+        .unwrap();
         let request_signature = hex_encode(&message_digest);
 
         let hostname = "https://storage.googleapis.com";
