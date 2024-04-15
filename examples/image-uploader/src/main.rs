@@ -150,13 +150,9 @@ async fn main() -> anyhow::Result<()> {
     let signing_key = if use_sign_blob {
         cloud_storage_signature::SigningKey::bound_token()
     } else {
-        let service_account = cloud_storage_signature::ServiceAccountCredentials::load(
-            std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?,
-        )?;
-        cloud_storage_signature::SigningKey::service_account(
-            service_account.client_email,
-            service_account.private_key,
-        )
+        cloud_storage_signature::SigningKey::service_account_from_path(std::env::var(
+            "GOOGLE_APPLICATION_CREDENTIALS",
+        )?)?
     };
     let config = Config {
         bucket_name: std::env::var("BUCKET_NAME")?,
