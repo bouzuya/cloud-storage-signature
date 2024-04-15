@@ -22,17 +22,10 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
     use cloud_storage_signature::BuildSignedUrlOptions;
     use cloud_storage_signature::HtmlFormData;
     use cloud_storage_signature::PolicyDocumentSigningOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
-    let signing_key = SigningKey::service_account(
-        service_account_client_email.clone(),
-        service_account_private_key.clone(),
-    );
+    let signing_key =
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "foo";
 
@@ -93,18 +86,13 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
 async fn test_setup_a_txt() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signing_key =
-        SigningKey::service_account(service_account_client_email, service_account_private_key);
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let now = SystemTime::now();
     let url = build_signed_url(BuildSignedUrlOptions {
         bucket_name: bucket_name.clone(),
@@ -153,18 +141,13 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
 async fn test_get() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signing_key =
-        SigningKey::service_account(service_account_client_email, service_account_private_key);
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signed_url = build_signed_url(BuildSignedUrlOptions {
         bucket_name,
         object_name: object_name.to_string(),
@@ -189,18 +172,13 @@ async fn test_get() -> anyhow::Result<()> {
 async fn test_get_timeout() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signing_key =
-        SigningKey::service_account(service_account_client_email, service_account_private_key);
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signed_url = build_signed_url(BuildSignedUrlOptions {
         bucket_name,
         object_name: object_name.to_string(),
@@ -226,18 +204,13 @@ async fn test_get_timeout() -> anyhow::Result<()> {
 async fn test_post_invalid_http_method() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "a.txt";
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signing_key =
-        SigningKey::service_account(service_account_client_email, service_account_private_key);
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signed_url = build_signed_url(BuildSignedUrlOptions {
         bucket_name,
         object_name: object_name.to_string(),
@@ -261,18 +234,13 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
 async fn test_post() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "b.txt";
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signing_key =
-        SigningKey::service_account(service_account_client_email, service_account_private_key);
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let url = build_signed_url(BuildSignedUrlOptions {
         bucket_name: bucket_name.clone(),
         object_name: object_name.to_string(),
@@ -314,18 +282,13 @@ async fn test_post() -> anyhow::Result<()> {
 async fn test_post_bin() -> anyhow::Result<()> {
     use cloud_storage_signature::build_signed_url;
     use cloud_storage_signature::BuildSignedUrlOptions;
-    use cloud_storage_signature::ServiceAccountCredentials;
     use cloud_storage_signature::SigningKey;
 
     let bucket_name = std::env::var("BUCKET_NAME")?;
     let object_name = "c.png";
 
-    let ServiceAccountCredentials {
-        client_email: service_account_client_email,
-        private_key: service_account_private_key,
-    } = ServiceAccountCredentials::load(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let signing_key =
-        SigningKey::service_account(service_account_client_email, service_account_private_key);
+        SigningKey::service_account_from_path(std::env::var("GOOGLE_APPLICATION_CREDENTIALS")?)?;
     let url = build_signed_url(BuildSignedUrlOptions {
         bucket_name: bucket_name.clone(),
         object_name: object_name.to_string(),

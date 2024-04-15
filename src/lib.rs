@@ -28,7 +28,6 @@
 //!
 pub mod html_form_data;
 mod private;
-mod service_account_credentials;
 mod signing_key;
 
 use std::str::FromStr;
@@ -46,7 +45,6 @@ use self::private::Service;
 use self::private::SignedUrl;
 
 pub use self::html_form_data::{HtmlFormData, HtmlFormDataBuilder, PolicyDocumentSigningOptions};
-pub use self::service_account_credentials::ServiceAccountCredentials;
 pub use self::signing_key::SigningKey;
 
 #[derive(Debug, thiserror::Error)]
@@ -62,27 +60,13 @@ enum ErrorKind {
     #[error("expiration out of range")]
     ExpirationOutOfRange,
     #[error(transparent)]
-    File(std::io::Error),
-    #[error(transparent)]
     HttpMethod(crate::private::http_verb::Error),
     #[error(transparent)]
     HttpRequest(http::Error),
-    #[error("invalid json")]
-    InvalidServiceAccountJson(serde_json::Error),
     #[error(transparent)]
     Location(crate::private::location::Error),
     #[error("now out of range")]
     Now,
-    #[error("client_email is not found")]
-    ServiceAccountJsonClientEmailIsNotFound,
-    #[error("client_email is not string")]
-    ServiceAccountJsonClientEmailIsNotString,
-    #[error("json root is not object")]
-    ServiceAccountJsonRootIsNotObject,
-    #[error("private_key is not found")]
-    ServiceAccountJsonPrivateKeyIsNotFound,
-    #[error("private_key is not string")]
-    ServiceAccountJsonPrivateKeyIsNotString,
     #[error(transparent)]
     SignedUrl(crate::private::signed_url::Error),
 }
