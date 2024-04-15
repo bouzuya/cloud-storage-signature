@@ -9,7 +9,6 @@ This crate is in ALPHA. Do not use in production.
 
 ## TODOs
 
-- Support not signBlob with BoundedToken
 - Support signBlob with ServiceAccount
 - Support HMAC key
 - Improve error handling
