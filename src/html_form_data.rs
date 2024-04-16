@@ -13,7 +13,7 @@ use crate::{
 pub struct Error(#[from] ErrorKind);
 
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum ErrorKind {
+enum ErrorKind {
     #[error("accessible_at out of range")]
     AccessibleAtOutOfRange,
     #[error("bound token authorizer: {0}")]
