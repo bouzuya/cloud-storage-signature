@@ -4,6 +4,8 @@ use super::{BoundToken, SigningAlgorithm};
 pub(crate) enum Error {
     #[error("bound token authorizer error: {0}")]
     BoundTokenAuthorizer(#[source] crate::private::bound_token::BoundTokenError),
+    #[error("bound token must use sign blob")]
+    BoundTokenMustUseSignBlob,
     #[error("bound token signing error: {0}")]
     BoundTokenSigning(#[source] crate::private::bound_token::BoundTokenError),
     #[error("service account private key pem parsing error: {0}")]
@@ -53,7 +55,7 @@ impl SigningKeyInner {
                         .await
                         .map_err(Error::BoundTokenSigning)?)
                 } else {
-                    todo!()
+                    Err(Error::BoundTokenMustUseSignBlob)
                 }
             }
             SigningKeyInner::Hmac { .. } => todo!(),
