@@ -29,7 +29,7 @@
 pub mod html_form_data;
 mod private;
 pub mod signed_url;
-mod signing_key;
+pub mod signing_key;
 
 pub use self::html_form_data::{HtmlFormData, HtmlFormDataBuilder, PolicyDocumentSigningOptions};
 pub use self::signed_url::{build_signed_url, BuildSignedUrlOptions};
