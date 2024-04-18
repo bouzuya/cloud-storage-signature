@@ -56,6 +56,7 @@ pub(crate) enum BoundTokenError {
 
 #[derive(Clone)]
 pub(crate) struct BoundToken {
+    base_url: String,
     cache: Arc<tokio::sync::Mutex<Option<(String, String, SystemTime)>>>,
     client: reqwest::Client,
 }
@@ -63,6 +64,12 @@ pub(crate) struct BoundToken {
 impl BoundToken {
     pub fn new() -> Self {
         Self {
+            base_url: format!(
+                "http://{}",
+                std::env::var("GCE_METADATA_HOST")
+                    .ok()
+                    .unwrap_or_else(|| "metadata.google.internal".to_string())
+            ),
             cache: Arc::new(tokio::sync::Mutex::new(None)),
             client: reqwest::Client::new(),
         }
@@ -85,7 +92,10 @@ impl BoundToken {
             Some(_) | None => {
                 // email
                 // <https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys>
-                let url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email";
+                let url = format!(
+                    "{}/computeMetadata/v1/instance/service-accounts/default/email",
+                    self.base_url
+                );
                 let request = self
                     .client
                     .request(reqwest::Method::GET, url)
@@ -116,7 +126,10 @@ impl BoundToken {
 
                 // token
                 // <https://google.aip.dev/auth/4115>
-                let url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
+                let url = format!(
+                    "{}/computeMetadata/v1/instance/service-accounts/default/token",
+                    self.base_url
+                );
                 let request = self
                     .client
                     .request(reqwest::Method::GET, url)
@@ -236,5 +249,13 @@ mod tests {
     fn test() {
         fn assert_impls<T: Clone + Send + Sync>() {}
         assert_impls::<BoundToken>();
+    }
+
+    #[test]
+    fn test_internal_gce_metadata_host() {
+        let bound_token = temp_env::with_var("GCE_METADATA_HOST", Some("169.254.169.254"), || {
+            BoundToken::new()
+        });
+        assert_eq!(bound_token.base_url, "http://169.254.169.254");
     }
 }
