@@ -4,9 +4,10 @@ use crate::private::utils::UnixTimestamp;
 
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum Error {
-    // TODO:
-    #[error("invalid format or out of range")]
-    InvalidFormatOrOutOfRange(#[from] crate::private::utils::unix_timestamp::Error),
+    #[error("out of range")]
+    OutOfRange(i64),
+    #[error("rfc3339 format : {0}")]
+    Rfc3339Format(String),
 }
 
 // <del>YYYYMMDD'T'HHMMSS'Z'</del>
@@ -30,7 +31,12 @@ impl std::str::FromStr for Expiration {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let unix_timestamp = UnixTimestamp::from_rfc3339(s).map_err(Error::from)?;
+        use crate::private::utils::unix_timestamp::Error as E;
+        let unix_timestamp = UnixTimestamp::from_rfc3339(s).map_err(|e| match e {
+            E::InvalidIso8601Format(_) => unreachable!(),
+            E::InvalidRfc3339Format(s) => Error::Rfc3339Format(s),
+            E::OutOfRange(n) => Error::OutOfRange(n),
+        })?;
         Ok(Expiration(unix_timestamp))
     }
 }
