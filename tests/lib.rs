@@ -70,6 +70,7 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
         signing_key,
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -105,6 +106,7 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         signing_key: signing_key.clone(),
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let client = reqwest::Client::new();
@@ -127,6 +129,7 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         signing_key: signing_key.clone(),
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -161,6 +164,7 @@ async fn test_get() -> anyhow::Result<()> {
         signing_key,
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
 
@@ -193,6 +197,7 @@ async fn test_get_timeout() -> anyhow::Result<()> {
         signing_key,
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
 
@@ -226,6 +231,7 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
         signing_key,
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
 
@@ -257,6 +263,7 @@ async fn test_post() -> anyhow::Result<()> {
         signing_key: signing_key.clone(),
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let client = reqwest::Client::new();
@@ -276,6 +283,7 @@ async fn test_post() -> anyhow::Result<()> {
         signing_key,
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -307,6 +315,7 @@ async fn test_post_bin() -> anyhow::Result<()> {
         signing_key: signing_key.clone(),
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let client = reqwest::Client::new();
@@ -329,6 +338,7 @@ async fn test_post_bin() -> anyhow::Result<()> {
         signing_key,
         use_sign_blob: false,
         headers: vec![],
+        query_parameters: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;

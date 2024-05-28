@@ -29,6 +29,8 @@ enum ErrorKind {
     #[error(transparent)]
     InvalidHeaderValue(http::header::InvalidHeaderValue),
     #[error(transparent)]
+    InvalidQueryParameters(#[from] url::ParseError),
+    #[error(transparent)]
     Location(crate::private::location::Error),
     #[error("now out of range")]
     Now,
@@ -47,6 +49,7 @@ pub struct BuildSignedUrlOptions {
     pub signing_key: SigningKey,
     pub use_sign_blob: bool,
     pub headers: Vec<(String, String)>,
+    pub query_parameters: Vec<(String, String)>,
 }
 
 pub async fn build_signed_url(
@@ -60,6 +63,7 @@ pub async fn build_signed_url(
         signing_key,
         use_sign_blob,
         headers,
+        query_parameters,
     }: BuildSignedUrlOptions,
 ) -> Result<String, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
@@ -74,18 +78,25 @@ pub async fn build_signed_url(
     .map_err(|_| ErrorKind::ExpirationOutOfRange)?;
 
     let http_method = HttpVerb::from_str(http_method.as_str()).map_err(ErrorKind::HttpMethod)?;
+    let mut url = url::Url::parse(
+        format!(
+            "https://storage.googleapis.com/{}/{}",
+            // TODO: escape bucket_name and object_name
+            bucket_name,
+            object_name
+        )
+        .as_str(),
+    )
+    .map_err(ErrorKind::InvalidQueryParameters)?;
+    url.query_pairs_mut().extend_pairs(
+        query_parameters
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str())),
+    );
     let mut request = http::Request::builder()
         .header("Host", "storage.googleapis.com")
         .method(http::Method::from(http_method))
-        .uri(
-            format!(
-                "https://storage.googleapis.com/{}/{}",
-                // TODO: escape bucket_name and object_name
-                bucket_name,
-                object_name
-            )
-            .as_str(),
-        )
+        .uri(url.to_string())
         .body(())
         .map_err(ErrorKind::HttpRequest)?;
     request.headers_mut().extend(
