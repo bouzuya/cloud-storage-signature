@@ -110,3 +110,15 @@ async fn test_gce_metadata_host_env() -> Result<(), cloud_storage_signature::htm
 
     Ok(())
 }
+
+#[test]
+fn test_build_signed_url_options_headers() {
+    // Add `headers` field to `BuildSignedUrlOptions`.
+    // TODO:
+}
+
+#[test]
+fn test_build_signed_url_options_query_parameters() {
+    // Add `query_parameters` field to `BuildSignedUrlOptions`.
+    // TODO:
+}
