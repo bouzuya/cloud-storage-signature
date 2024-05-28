@@ -69,6 +69,7 @@ async fn test_build_html_form_data() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key,
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -103,6 +104,7 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         accessible_at: Some(now),
         signing_key: signing_key.clone(),
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let client = reqwest::Client::new();
@@ -124,6 +126,7 @@ async fn test_setup_a_txt() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key: signing_key.clone(),
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -157,6 +160,7 @@ async fn test_get() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key,
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
 
@@ -188,6 +192,7 @@ async fn test_get_timeout() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key,
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
 
@@ -220,6 +225,7 @@ async fn test_post_invalid_http_method() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key,
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
 
@@ -250,6 +256,7 @@ async fn test_post() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key: signing_key.clone(),
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let client = reqwest::Client::new();
@@ -268,6 +275,7 @@ async fn test_post() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key,
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;
@@ -298,6 +306,7 @@ async fn test_post_bin() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key: signing_key.clone(),
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let client = reqwest::Client::new();
@@ -319,6 +328,7 @@ async fn test_post_bin() -> anyhow::Result<()> {
         accessible_at: None,
         signing_key,
         use_sign_blob: false,
+        headers: vec![],
     })
     .await?;
     let response = reqwest::get(url).await?;

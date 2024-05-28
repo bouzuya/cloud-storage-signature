@@ -25,6 +25,10 @@ enum ErrorKind {
     #[error(transparent)]
     HttpRequest(http::Error),
     #[error(transparent)]
+    InvalidHeaderName(http::header::InvalidHeaderName),
+    #[error(transparent)]
+    InvalidHeaderValue(http::header::InvalidHeaderValue),
+    #[error(transparent)]
     Location(crate::private::location::Error),
     #[error("now out of range")]
     Now,
@@ -42,6 +46,7 @@ pub struct BuildSignedUrlOptions {
     pub accessible_at: Option<SystemTime>,
     pub signing_key: SigningKey,
     pub use_sign_blob: bool,
+    pub headers: Vec<(String, String)>,
 }
 
 pub async fn build_signed_url(
@@ -54,6 +59,7 @@ pub async fn build_signed_url(
         accessible_at,
         signing_key,
         use_sign_blob,
+        headers,
     }: BuildSignedUrlOptions,
 ) -> Result<String, Error> {
     let accessible_at = accessible_at.unwrap_or_else(SystemTime::now);
@@ -68,7 +74,7 @@ pub async fn build_signed_url(
     .map_err(|_| ErrorKind::ExpirationOutOfRange)?;
 
     let http_method = HttpVerb::from_str(http_method.as_str()).map_err(ErrorKind::HttpMethod)?;
-    let request = http::Request::builder()
+    let mut request = http::Request::builder()
         .header("Host", "storage.googleapis.com")
         .method(http::Method::from(http_method))
         .uri(
@@ -82,6 +88,20 @@ pub async fn build_signed_url(
         )
         .body(())
         .map_err(ErrorKind::HttpRequest)?;
+    request.headers_mut().extend(
+        headers
+            .iter()
+            .map(
+                |(k, v)| -> Result<(http::header::HeaderName, http::header::HeaderValue), Error> {
+                    let key = http::header::HeaderName::from_bytes(k.as_bytes())
+                        .map_err(ErrorKind::InvalidHeaderName)?;
+                    let value = http::header::HeaderValue::from_str(v)
+                        .map_err(ErrorKind::InvalidHeaderValue)?;
+                    Ok((key, value))
+                },
+            )
+            .collect::<Result<Vec<_>, Error>>()?,
+    );
     let credential_scope = CredentialScope::new(
         Date::from_unix_timestamp_obj(now),
         Location::try_from(region.as_str()).map_err(ErrorKind::Location)?,
