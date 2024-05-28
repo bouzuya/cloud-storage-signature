@@ -94,6 +94,8 @@ async fn list_images(
                 accessible_at: None,
                 signing_key: signing_key.clone(),
                 use_sign_blob,
+                headers: vec![],
+                query_parameters: vec![],
             },
         )
         .await
