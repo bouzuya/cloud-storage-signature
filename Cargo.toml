@@ -19,7 +19,7 @@ pem = "3.0.3"
 reqwest = { version = "0.12.2", default-features = false, features = ["rustls-tls"] }
 ring = "0.17.8"
 serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.115"
+serde_json = "1.0.120"
 sha256 = "1.5.0"
 thiserror = "1.0.58"
 tokio = "1.37.0"
@@ -31,7 +31,7 @@ reqwest = { version = "0.12.2", default-features = false, features = [
   "rustls-tls",
   "multipart",
 ] }
-serde_json = "1.0.115"
+serde_json = "1.0.120"
 serial_test = "3.0.0"
 temp-env = "0.3.6"
 tokio = { version = "1.37.0", features = ["full"] }
