@@ -31,7 +31,6 @@ reqwest = { version = "0.12.2", default-features = false, features = [
   "rustls-tls",
   "multipart",
 ] }
-serde_json = "1.0.115"
 serial_test = "3.0.0"
 temp-env = "0.3.6"
 tokio = { version = "1.37.0", features = ["full"] }
