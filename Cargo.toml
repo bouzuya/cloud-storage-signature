@@ -21,17 +21,17 @@ ring = "0.17.8"
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 sha256 = "1.5.0"
-thiserror = "1.0.58"
+thiserror = "2"
 tokio = "1.37.0"
 url = "2.5.0"
 
 [dev-dependencies]
-anyhow = "1.0.81"
-reqwest = { version = "0.12.2", default-features = false, features = [
+anyhow = "1"
+reqwest = { version = "0.12", default-features = false, features = [
   "rustls-tls",
   "multipart",
 ] }
-serial_test = "3.0.0"
-temp-env = "0.3.6"
-tokio = { version = "1.37.0", features = ["full"] }
-wiremock = "0.6.0"
+serial_test = "3"
+temp-env = "0.3"
+tokio = { version = "1", features = ["full"] }
+wiremock = "0.6"
