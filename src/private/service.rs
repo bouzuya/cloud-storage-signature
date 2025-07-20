@@ -2,6 +2,8 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Service {
     Storage,
+    // TODO: support S3
+    #[allow(dead_code)]
     S3,
 }
 

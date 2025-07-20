@@ -81,8 +81,7 @@ impl<'de> serde::Deserialize<'de> for Condition {
                     }
                     _ => {
                         return Err(serde::de::Error::custom(format!(
-                            "unknown condition `{}`",
-                            condition
+                            "unknown condition `{condition}`"
                         )))
                     }
                 })
@@ -100,10 +99,10 @@ impl serde::Serialize for Condition {
     {
         match self {
             Condition::ExactMatching(field, value) => {
-                ("eq", format!("${}", field), value.to_string()).serialize(serializer)
+                ("eq", format!("${field}"), value.to_string()).serialize(serializer)
             }
             Condition::StartsWith(field, value) => {
-                ("starts-with", format!("${}", field), value.to_string()).serialize(serializer)
+                ("starts-with", format!("${field}"), value.to_string()).serialize(serializer)
             }
             Condition::ContentLengthRange(min_range, max_range) => {
                 ("content-length-range", min_range, max_range).serialize(serializer)

@@ -121,7 +121,7 @@ fn add_signed_url_required_query_string_parameters(
 pub(crate) fn hex_encode(message_digest: &[u8]) -> String {
     use std::fmt::Write as _;
     message_digest.iter().fold(String::new(), |mut s, b| {
-        let _ = write!(s, "{:02x}", b);
+        let _ = write!(s, "{b:02x}");
         s
     })
 }

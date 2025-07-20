@@ -3,6 +3,8 @@
 pub enum SigningAlgorithm {
     Goog4RsaSha256,
     Goog4HmacSha256,
+    // TODO: support AWS4-HMAC-SHA256
+    #[allow(dead_code)]
     Aws4HmacSha256,
 }
 

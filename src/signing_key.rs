@@ -82,18 +82,18 @@ impl SigningKey {
             .map_err(ErrorKind::ServiceAccountJsonDeserialize)?;
         let json_object = json_value
             .as_object()
-            .ok_or_else(|| ErrorKind::ServiceAccountJsonRootIsNotObject)?;
+            .ok_or(ErrorKind::ServiceAccountJsonRootIsNotObject)?;
         let client_email = json_object
             .get("client_email")
-            .ok_or_else(|| ErrorKind::ServiceAccountJsonClientEmailIsNotFound)?
+            .ok_or(ErrorKind::ServiceAccountJsonClientEmailIsNotFound)?
             .as_str()
-            .ok_or_else(|| ErrorKind::ServiceAccountJsonClientEmailIsNotString)?
+            .ok_or(ErrorKind::ServiceAccountJsonClientEmailIsNotString)?
             .to_string();
         let private_key = json_object
             .get("private_key")
-            .ok_or_else(|| ErrorKind::ServiceAccountJsonPrivateKeyIsNotFound)?
+            .ok_or(ErrorKind::ServiceAccountJsonPrivateKeyIsNotFound)?
             .as_str()
-            .ok_or_else(|| ErrorKind::ServiceAccountJsonPrivateKeyIsNotString)?
+            .ok_or(ErrorKind::ServiceAccountJsonPrivateKeyIsNotString)?
             .to_string();
         Ok(Self::service_account(client_email, private_key))
     }

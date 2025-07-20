@@ -2,6 +2,8 @@
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum RequestType {
     Goog4Request,
+    // TODO: support Aws4Request
+    #[allow(dead_code)]
     Aws4Request,
 }
 

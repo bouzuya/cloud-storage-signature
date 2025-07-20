@@ -80,10 +80,8 @@ pub async fn build_signed_url(
     let http_method = HttpVerb::from_str(http_method.as_str()).map_err(ErrorKind::HttpMethod)?;
     let mut url = url::Url::parse(
         format!(
-            "https://storage.googleapis.com/{}/{}",
             // TODO: escape bucket_name and object_name
-            bucket_name,
-            object_name
+            "https://storage.googleapis.com/{bucket_name}/{object_name}",
         )
         .as_str(),
     )

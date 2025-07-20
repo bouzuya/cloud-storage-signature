@@ -100,7 +100,7 @@ impl std::fmt::Display for Inner {
             Inner::XGoogCustomTime => "x-goog-custom-time".to_string(),
             Inner::XGoogDate => "x-goog-date".to_string(),
             Inner::XGoogSignature => "x-goog-signature".to_string(),
-            Inner::XGoogMeta(s) => format!("x-goog-meta-{}", s),
+            Inner::XGoogMeta(s) => format!("x-goog-meta-{s}"),
         }
         .fmt(f)
     }

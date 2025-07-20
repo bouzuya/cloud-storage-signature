@@ -188,13 +188,12 @@ impl BoundToken {
             signed_blob: String,
         }
         let url = format!(
-            "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{}:signBlob",
-            email
+            "https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/{email}:signBlob"
         );
         let request = self
             .client
             .request(reqwest::Method::POST, url)
-            .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", token))
+            .header(reqwest::header::AUTHORIZATION, format!("Bearer {token}"))
             .header(reqwest::header::CONTENT_TYPE, "application/json")
             .body(
                 serde_json::to_string(&SignBlobRequestBody {

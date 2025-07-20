@@ -298,7 +298,7 @@ impl HtmlFormDataBuilder {
             if key.is_empty() {
                 return Err(Error::from(ErrorKind::XGoogMetaNameEmpty));
             }
-            vec.push((format!("x-goog-meta-{}", key), value));
+            vec.push((format!("x-goog-meta-{key}"), value));
         }
         Ok(HtmlFormData(vec))
     }
@@ -438,7 +438,7 @@ impl HtmlFormDataBuilder {
                 )
                 .map_err(ErrorKind::XGoogCredentialInvalid)?;
                 let x_goog_credential =
-                    format!("{}/{}", service_account_client_email, credential_scope);
+                    format!("{service_account_client_email}/{credential_scope}");
                 let x_goog_date = accessible_at.to_iso8601_basic_format_date_time();
                 let expiration = policy_document::Expiration::from_unix_timestamp_obj(expiration);
 
@@ -541,7 +541,7 @@ impl HtmlFormDataBuilder {
                         return Err(Error::from(ErrorKind::XGoogMetaNameEmpty));
                     }
                     conditions.push(policy_document::Condition::ExactMatching(
-                        policy_document::Field::new(format!("x-goog-meta-{}", name))
+                        policy_document::Field::new(format!("x-goog-meta-{name}"))
                             .expect("x-goog-meta-* to be valid field name"),
                         policy_document::Value::new(value),
                     ));
