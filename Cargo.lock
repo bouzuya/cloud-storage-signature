@@ -129,7 +129,7 @@ dependencies = [
 
 [[package]]
 name = "cloud-storage-signature"
-version = "0.6.23"
+version = "0.6.24"
 dependencies = [
  "anyhow",
  "async-trait",
